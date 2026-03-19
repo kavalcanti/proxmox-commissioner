@@ -1,0 +1,19 @@
+# IDE and .directories
+.*/
+TODO.md
+
+# Secrets file
+**/vault.yml
+**/infrastructure.env
+**/*.infrastructure.env
+**/local.env
+**/.vaultpass
+
+# Terraform files
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/.terraform/
+**/.terraform.lock.hcl
+
+# Running services
+config/services/*/
