@@ -1,0 +1,30 @@
+---
+# Base configuration for all environments
+ansible_python_interpreter: /usr/bin/python3
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# System Configuration
+
+# Default SSH port if not specified
+ssh_port: 22
+prod_ssh_port: 4224
+
+# Default user configuration
+user_devops: devops
+user_root: root
+user_devops_password: "{{ vault_devops_password }}"
+
+# Default security settings
+fail2ban_bantime: 3600
+fail2ban_findtime: 600
+fail2ban_maxretry: 5
+
+# SSH key configuration
+ssh_key_dir: "~/.ssh/ansible_keys"
+ssh_private_key: "{{ ssh_key_dir }}/{{ sys_hostname }}"
+ssh_public_key: "{{ lookup('file', ssh_private_key + '.pub') }}"
+
+# Docker Configuration
+docker_users:
+  - "{{ user_devops }}"
+

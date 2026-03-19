@@ -1,0 +1,17 @@
+---
+# Example vault file - DO NOT store actual passwords here
+# Copy this file to vault.yml and encrypt it with ansible-vault
+
+# Initial root access
+vault_root_password: "original_root_password"
+
+# New root password for initial setup
+vault_new_root_password: "new_root_password"
+
+# Sudo password for new user and privilege escalation
+vault_devops_password: "devops_password"
+
+# Additional secrets can be added here
+# vault_additional_secret: "secret_value_here" 
+
+vault_cloudflare_api_token: "cloudflare_api_token"

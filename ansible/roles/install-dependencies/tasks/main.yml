@@ -1,0 +1,19 @@
+---
+- name: Debug - Confirm role execution
+  ansible.builtin.debug:
+    msg: "Executing install-dependencies role"
+
+- name: Update package cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install security packages
+  ansible.builtin.apt:
+    name:
+      - sudo
+      - fail2ban
+      - unattended-upgrades
+      - rkhunter
+      - ufw
+    state: present

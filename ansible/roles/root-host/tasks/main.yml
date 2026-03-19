@@ -1,0 +1,41 @@
+---
+- name: Ensure we're initially connecting as root
+  ansible.builtin.fail:
+    msg: "Initial setup must be run as root. Please ensure user_root is set in your inventory."
+  when: ansible_user != user_root
+  run_once: true
+
+- name: Check if initial password change was already done
+  ansible.builtin.stat:
+    path: /etc/ansible_initial_setup_complete
+  register: initial_setup_marker
+
+- name: Change root user password (first run only)
+  ansible.builtin.user:
+    name: "{{ user_root }}"
+    password: "{{ vault_new_root_password | password_hash('sha512') }}"
+    update_password: always
+  when: not initial_setup_marker.stat.exists
+  register: password_update
+
+- name: Mark initial password change as complete
+  ansible.builtin.file:
+    path: /etc/ansible_initial_setup_complete
+    state: touch
+    mode: '0644'
+  when: not initial_setup_marker.stat.exists
+
+- name: Set a hostname
+  become: true
+  ansible.builtin.hostname:
+    name: "{{ sys_hostname }}"
+  register: hostname_change
+
+- name: Ensure hostname is in /etc/hosts
+  become: true
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s+'
+    line: "127.0.1.1 {{ sys_hostname }}"
+    state: present
+  register: hosts_change

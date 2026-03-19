@@ -1,0 +1,43 @@
+---
+- name: Ensure we're initially connecting as root
+  ansible.builtin.fail:
+    msg: "Initial setup must be run as root. Please ensure user_root is set in your inventory."
+  when: ansible_user != user_root
+  run_once: true
+
+- name: Create devops user with sudo access
+  ansible.builtin.user:
+    name: "{{ user_devops }}"
+    groups: sudo
+    shell: /bin/bash
+    create_home: true
+    state: present
+    password: "{{ user_devops_password | password_hash('sha512') }}"
+    update_password: on_create
+
+- name: Ensure SSH key directory exists on control node
+  ansible.builtin.file:
+    path: "{{ ssh_key_dir }}"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Generate SSH keypair on control node (idempotent)
+  community.crypto.openssh_keypair:
+    path: "{{ ssh_private_key }}"
+    type: rsa
+    size: 4096
+    state: present
+    force: false
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Copy SSH key to the devops user
+  ansible.posix.authorized_key:
+    user: "{{ user_devops }}"
+    state: present
+    key: "{{ lookup('file', ssh_private_key + '.pub') }}"
+    comment: "ansible-managed-{{ user_devops }}"

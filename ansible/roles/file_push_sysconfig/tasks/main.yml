@@ -1,0 +1,28 @@
+---
+- name: Set filesystem source path
+  ansible.builtin.set_fact:
+    _sysconfig_base: "{{ project_root }}/config/services/{{ service_name }}/filesystem"
+
+- name: Find top-level directories excluding home
+  ansible.builtin.find:
+    paths: "{{ _sysconfig_base }}"
+    file_type: directory
+    recurse: false
+    excludes:
+      - "home"
+  delegate_to: localhost
+  become: false
+  register: _sysconfig_dirs
+
+- name: Copy sysconfig directories to remote
+  ansible.builtin.copy:
+    src: "{{ item.path }}/"
+    dest: "/{{ item.path | basename }}/"
+    owner: "{{ file_push_sysconfig_owner }}"
+    group: "{{ file_push_sysconfig_group }}"
+    mode: preserve
+  become: true
+  loop: "{{ _sysconfig_dirs.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: _sysconfig_dirs.files | length > 0

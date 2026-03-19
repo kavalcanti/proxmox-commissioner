@@ -1,0 +1,140 @@
+---
+- name: Install Certbot DNS plugin (Cloudflare DNS-01)
+  ansible.builtin.apt:
+    name:
+      - python3-certbot-dns-cloudflare
+    state: present
+    update_cache: true
+
+- name: Read Cloudflare API token from Ansible Vault
+  ansible.builtin.set_fact:
+    _cloudflare_api_token: "{{ vault_cloudflare_api_token | default('', true) }}"
+
+- name: Ensure Cloudflare API token is provided
+  ansible.builtin.assert:
+    that:
+      - _cloudflare_api_token | length > 0
+    fail_msg: >-
+      Missing required Ansible Vault variable `vault_cloudflare_api_token`.
+      Set it in your encrypted `config/defaults/ansible/vault.yml`.
+
+- name: Write Cloudflare credentials file for certbot
+  ansible.builtin.copy:
+    dest: "{{ webserver_cloudflare_credentials_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      dns_cloudflare_api_token = {{ _cloudflare_api_token }}
+
+- name: Check if wildcard certificate already exists
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ webserver_cert_name }}/fullchain.pem"
+  register: _webserver_cert_live
+
+- name: Obtain wildcard certificate using DNS-01 (Cloudflare)
+  ansible.builtin.command:
+    argv:
+      - certbot
+      - certonly
+      - --dns-cloudflare
+      - --dns-cloudflare-credentials
+      - "{{ webserver_cloudflare_credentials_path }}"
+      - -d
+      - "{{ webserver_cert_domain_wildcard }}"
+      - --email
+      - "{{ webserver_cert_email }}"
+      - --agree-tos
+      - --non-interactive
+      - --cert-name
+      - "{{ webserver_cert_name }}"
+  args:
+    creates: "/etc/letsencrypt/live/{{ webserver_cert_name }}/fullchain.pem"
+  when: not _webserver_cert_live.stat.exists
+
+- name: Install certbot renewal deploy hook (reload nginx)
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/999-reload-nginx.sh
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -e
+      systemctl reload nginx
+
+- name: Ensure nginx sites-available/enabled directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "/etc/nginx/sites-available"
+    - "/etc/nginx/sites-enabled"
+
+- name: Ensure at least one nginx site config is configured
+  ansible.builtin.assert:
+    that:
+      - nginx_sites_enabled_configs is defined
+      - nginx_sites_enabled_configs | length > 0
+    fail_msg: >-
+      Missing `nginx_sites_enabled_configs`. Set it in role vars or defaults
+      to the list of /etc/nginx/sites-available/*.conf filenames to enable.
+
+- name: Validate nginx site config payloads exist
+  ansible.builtin.stat:
+    path: "/etc/nginx/sites-available/{{ item }}"
+  register: _nginx_site_payload_stats
+  loop: "{{ nginx_sites_enabled_configs }}"
+
+- name: Fail if expected nginx site config payload is missing
+  ansible.builtin.fail:
+    msg: >-
+      Expected nginx site config at /etc/nginx/sites-available/{{ item.item }}.
+      Make sure the playbook ran `file_push_sysconfig` before `webserver-config`.
+  when: not item.stat.exists
+  loop: "{{ _nginx_site_payload_stats.results }}"
+
+- name: Enable nginx selected sites (symlink into sites-enabled)
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ item }}"
+    dest: "/etc/nginx/sites-enabled/{{ item }}"
+    state: link
+    force: true
+  loop: "{{ nginx_sites_enabled_configs }}"
+
+- name: Find currently-enabled nginx site symlinks
+  ansible.builtin.find:
+    paths: /etc/nginx/sites-enabled
+    patterns: "*.conf"
+    file_type: link
+    recurse: false
+  register: _nginx_enabled_site_links
+
+- name: Remove undesired nginx site symlinks
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  when: (item.path | basename) not in nginx_sites_enabled_configs
+  loop: "{{ _nginx_enabled_site_links.files | default([]) }}"
+  tags: ['nginx-sites-cleanup']
+
+- name: Ensure nginx service is enabled and running
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Validate nginx configuration
+  ansible.builtin.command:
+    argv:
+      - nginx
+      - -t
+  changed_when: false
+
+- name: Reload nginx to apply new TLS config
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded

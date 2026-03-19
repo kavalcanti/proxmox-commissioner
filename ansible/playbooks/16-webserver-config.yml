@@ -1,0 +1,17 @@
+### Web Server TLS (Nginx + Certbot with Cloudflare DNS-01)
+---
+- name: Configure nginx TLS certificate (wildcard) and enable site
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+    ansible_port: "{{ prod_ssh_port }}"
+    project_root: "{{ playbook_dir }}/../.."
+  roles:
+    - role: file_push_sysconfig
+      tags: ['file-push', 'sysconfig']
+    - role: webserver-config
+      tags: ['webserver-config']
+

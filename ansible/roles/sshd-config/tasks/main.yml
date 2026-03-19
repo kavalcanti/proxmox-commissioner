@@ -1,0 +1,45 @@
+---
+- name: Change SSH port
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Port'
+    line: 'Port {{ prod_ssh_port }}'
+  notify: Restart SSH
+
+- name: Disable password authentication for SSH
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication {{ ssh_password_authentication }}'
+  notify: Restart SSH
+
+- name: Disable root login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin {{ ssh_permit_root_login }}'
+  notify: Restart SSH
+
+- name: Force handler execution
+  ansible.builtin.meta: flush_handlers
+
+- name: Update UFW rule for new SSH port
+  community.general.ufw:
+    rule: allow
+    port: "{{ prod_ssh_port }}"
+    proto: tcp
+  notify: Reload UFW
+
+- name: Remove UFW rule for old SSH port
+  community.general.ufw:
+    rule: deny
+    port: "{{ ssh_port }}"
+    proto: tcp
+  notify: Reload UFW
+  when: ssh_port != prod_ssh_port
+
+- name: Enable UFW with default deny
+  community.general.ufw:
+    state: enabled
+    policy: "{{ ufw_default_policy }}"
+  notify: Reload UFW

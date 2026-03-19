@@ -1,0 +1,39 @@
+---
+- name: Install NFS client packages
+  ansible.builtin.apt:
+    update_cache: true
+    name:
+      - nfs-common
+    state: present
+  when: nfs_mountpoints | length > 0
+
+- name: Ensure NFS mount directories exist
+  ansible.builtin.file:
+    path: "{{ item.mount_point }}"
+    state: directory
+    owner: "{{ user_devops }}"
+    group: "{{ user_devops }}"
+    mode: '0755'
+  loop: "{{ nfs_mountpoints }}"
+  when: nfs_mountpoints | length > 0
+
+- name: Mount NFS shares and persist in fstab
+  ansible.posix.mount:
+    path: "{{ item.mount_point }}"
+    # Accept exports with or without a leading '/', so inventory can use either:
+    #   export: "/exports/media"  or  export: "exports/media"
+    src: "{{ item.server }}:{{ (item.export | string).startswith('/') | ternary(item.export, '/' ~ item.export) }}"
+    fstype: "{{ item.fstype | default('nfs') }}"
+    opts: "{{ nfs_opts if (nfs_opts | length > 0) else omit }}"
+    boot: true
+    state: mounted
+  loop: "{{ nfs_mountpoints }}"
+  when: nfs_mountpoints | length > 0
+  vars:
+    # Support either a string (already comma-separated) or a list of options.
+    nfs_opts: >-
+      {{
+        (item.options is string)
+        | ternary(item.options, (item.options | default([]) | join(',')))
+      }}
+

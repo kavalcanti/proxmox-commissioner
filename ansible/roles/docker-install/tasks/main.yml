@@ -1,0 +1,134 @@
+---
+# Install Docker prerequisites
+- name: Install prerequisites for Docker
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+
+# Add Docker's official GPG key and repository
+- name: Create directory for apt keyrings
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Docker's official GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+    force: true
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/{{ ansible_distribution | lower }}
+      {{ ansible_distribution_release }} stable
+    state: present
+    filename: docker
+
+# Install Docker
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+      - docker-buildx-plugin
+    state: present
+
+# Configure Docker daemon
+- name: Create Docker daemon directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+
+# Configure user permissions
+- name: Create docker group
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add users to docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  with_items: "{{ docker_users }}"
+
+- name: Reset SSH connection so docker group is picked up
+  ansible.builtin.meta: reset_connection
+
+# Start and enable Docker service
+- name: Start and enable Docker service
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+# Setup Docker security measures
+- name: Create Docker security limits
+  ansible.builtin.copy:
+    mode: '0644'
+    dest: /etc/security/limits.d/docker.conf
+    content: |
+      *       soft    nproc     8192
+      *       hard    nproc     16384
+      *       soft    nofile    1048576
+      *       hard    nofile    1048576
+
+- name: Create systemd override directory for Docker
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: '0755'
+
+- name: Configure systemd override for Docker
+  ansible.builtin.copy:
+    mode: '0644'
+    dest: /etc/systemd/system/docker.service.d/override.conf
+    content: |
+      [Service]
+      LimitNOFILE=1048576
+      LimitNPROC=16384
+      LimitCORE=infinity
+  notify: Reload systemd and restart Docker
+
+# Configure Docker firewall rules
+- name: Configure UFW Docker rules
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/after.rules
+    marker: "# {mark} UFW AND DOCKER"
+    block: |
+      *filter
+      :ufw-user-forward - [0:0]
+      :ufw-docker-logging-deny - [0:0]
+      :DOCKER-USER - [0:0]
+      -A DOCKER-USER -j ufw-user-forward
+
+      -A DOCKER-USER -j RETURN -s 10.0.0.0/8
+      -A DOCKER-USER -j RETURN -s 172.16.0.0/12
+      -A DOCKER-USER -j RETURN -s 192.168.0.0/16
+
+      -A DOCKER-USER -p udp -m udp --sport 53 --dport 1024:65535 -j RETURN
+
+      -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 192.168.0.0/16
+      -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 10.0.0.0/8
+      -A DOCKER-USER -j ufw-docker-logging-deny -p tcp -m tcp --tcp-flags FIN,SYN,RST,ACK SYN -d 172.16.0.0/12
+      -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 192.168.0.0/16
+      -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 10.0.0.0/8
+      -A DOCKER-USER -j ufw-docker-logging-deny -p udp -m udp --dport 0:32767 -d 172.16.0.0/12
+
+      -A DOCKER-USER -j RETURN
+
+      -A ufw-docker-logging-deny -m limit --limit 3/min --limit-burst 10 -j LOG --log-prefix "[UFW DOCKER BLOCK] "
+      -A ufw-docker-logging-deny -j DROP
+
+      COMMIT
+  notify: Reload UFW

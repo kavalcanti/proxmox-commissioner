@@ -1,0 +1,20 @@
+---
+- name: Set home directory source path
+  ansible.builtin.set_fact:
+    _homedir_src: "{{ project_root }}/config/services/{{ service_name }}/filesystem/home/"
+
+- name: Check home directory source exists
+  ansible.builtin.stat:
+    path: "{{ _homedir_src }}"
+  delegate_to: localhost
+  become: false
+  register: _homedir_stat
+
+- name: Copy home directory content to remote
+  ansible.builtin.copy:
+    src: "{{ _homedir_src }}"
+    dest: /home/
+    owner: "{{ file_push_homedir_remote_user }}"
+    group: "{{ file_push_homedir_remote_user }}"
+    mode: preserve
+  when: _homedir_stat.stat.exists

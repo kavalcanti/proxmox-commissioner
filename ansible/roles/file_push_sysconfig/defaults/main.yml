@@ -1,0 +1,5 @@
+---
+# No role-specific defaults.
+# Requires `service_name` and `project_root` from inventory/playbook vars.
+file_push_sysconfig_owner: root
+file_push_sysconfig_group: root

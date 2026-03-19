@@ -1,0 +1,17 @@
+### ==== Kubernetes Playbook ==== ###
+# Installs Kubernetes
+# Initializes Kubernetes
+# Joins Kubernetes nodes
+
+---
+- name: Configure Docker
+  hosts: servers
+  become: true
+  gather_facts: true
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+    ansible_port: "{{ prod_ssh_port }}"
+  roles:
+    - role: kubernetes
+      tags: ['kubernetes']

@@ -1,0 +1,17 @@
+---
+# List of NFS mounts to configure on the target host(s).
+#
+# Example (expected shape):
+# nfs_mountpoints:
+#   - name: "media"
+#     server: "10.0.0.10"
+#     export: "/exports/media"
+#     mount_point: "/mnt/media"
+#     fstype: "nfs"
+#     options:
+#       - "vers=4"
+#       - "proto=tcp"
+#
+# This role consumes the `nfs_mountpoints` inventory variable.
+nfs_mountpoints: []
+

@@ -1,0 +1,6 @@
+- name: Reboot if hostname changed (optional)
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+    pre_reboot_delay: 5
+  when: hostname_change.changed or hosts_change.changed
+  tags: ['restart']

@@ -1,0 +1,19 @@
+---
+### ==== Docker Playbook ==== ###
+# Installs Docker and Docker Compose
+# Adds devops user to docker group
+# Configures Docker UFW after rules
+
+- name: Configure Docker
+  hosts: servers
+  become: true
+  gather_facts: true
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+    ansible_port: "{{ prod_ssh_port }}"
+    docker_users:
+      - "{{ user_devops }}"
+  roles:
+    - role: docker-install
+      tags: ['docker']

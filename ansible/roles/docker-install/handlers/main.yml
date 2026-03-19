@@ -1,0 +1,14 @@
+- name: Reload UFW
+  ansible.builtin.service:
+    name: ufw
+    state: restarted
+
+- name: Restart Docker
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+
+- name: Reload systemd and restart Docker
+  ansible.builtin.systemd:
+    daemon_reload: true
+  notify: Restart Docker

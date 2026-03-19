@@ -1,0 +1,28 @@
+---
+- name: Validate compose file exists on remote
+  ansible.builtin.stat:
+    path: "{{ docker_deploy_compose_file }}"
+  register: _compose_file_stat
+
+- name: Fail when compose file is missing
+  ansible.builtin.fail:
+    msg: >-
+      Expected docker compose file at '{{ docker_deploy_compose_file }}'.
+      Ensure `25-file-push.yml` copied the service home directory to /home/{{ user_devops }}/{{ service_name }}.
+  when: not _compose_file_stat.stat.exists
+
+- name: Build docker compose up command arguments
+  ansible.builtin.set_fact:
+    _compose_up_argv: >-
+      {{
+        (['docker', 'compose', '-f', docker_deploy_compose_file, 'up', '-d', '--remove-orphans'])
+        + (['--force-recreate'] if docker_deploy_force_recreate | bool else [])
+        + (['--pull', docker_deploy_pull] if (docker_deploy_pull is defined and (docker_deploy_pull | string | length > 0)) else [])
+      }}
+
+- name: Run docker compose up (detached)
+  ansible.builtin.command:
+    argv: "{{ _compose_up_argv }}"
+  args:
+    chdir: "{{ docker_deploy_compose_dir }}"
+

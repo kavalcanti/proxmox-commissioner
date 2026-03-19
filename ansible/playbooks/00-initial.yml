@@ -1,0 +1,31 @@
+### ==== Initial Setup Playbook ==== ###
+# Installs sudo, fail2ban, unattended-upgrades, rkhunter and ufw
+# Changes root password
+# Creates a devops user with sudo access.
+# Creates SSH key for devops user with the server name.
+
+---
+- name: Initial Root Setup
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ user_root }}"
+    ansible_password: "{{ vault_root_password }}"
+    ansible_port: "{{ ssh_port }}"
+
+  roles:
+    - role: install-dependencies
+    - role: root-host
+      tags: ['dependencies']
+
+- name: Setup DevOps User
+  hosts: servers
+  gather_facts: false
+  become: true
+  vars:
+    ansible_user: "{{ user_root }}"
+    ansible_password: "{{ vault_new_root_password }}"
+    ansible_port: "{{ ssh_port }}"
+  roles:
+    - devops-user

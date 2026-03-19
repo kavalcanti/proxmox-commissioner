@@ -1,0 +1,5 @@
+---
+- name: Web server configuration
+  import_playbook: 15-web-server.yml
+- name: Docker configuration
+  import_playbook: 20-docker.yml

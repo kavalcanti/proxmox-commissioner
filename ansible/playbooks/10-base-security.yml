@@ -1,0 +1,26 @@
+### ==== Base Security Playbook ==== ###
+# Configures SSH port
+# Disables password authentication for SSH
+# Disables root login
+# Creates UFW rule for new SSH port
+# Creates UFW rule for old SSH port
+# Enables UFW with default deny
+# Coonfigures fail2ban and unattended-upgrades
+
+---
+- name: Configure Base Security
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+    ansible_port: "{{ ssh_port }}"
+  roles:
+    - role: sshd-config
+      tags: ['ssh']
+    - role: autoupdates
+      tags: ['autoupdates']
+    - role: fail2ban
+      tags: ['fail2ban']
+

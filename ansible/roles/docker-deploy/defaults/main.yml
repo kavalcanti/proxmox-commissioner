@@ -1,0 +1,15 @@
+---
+# Remote compose project location (copied via `file_push_homedir`).
+#
+# Expected layout on the remote host:
+#   /home/<user_devops>/<service_name>/docker-compose.yml
+docker_deploy_compose_dir: "/home/{{ user_devops }}/{{ service_name }}"
+docker_deploy_compose_file: "{{ docker_deploy_compose_dir }}/docker-compose.yml"
+
+# Compose behavior.
+docker_deploy_force_recreate: false
+
+# docker compose up --pull supports: always | missing | never
+# Use `missing` by default so we don't pull every time.
+docker_deploy_pull: "missing"
+

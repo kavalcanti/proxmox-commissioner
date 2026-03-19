@@ -1,0 +1,32 @@
+---
+- name: Install nginx and certbot
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+    state: present
+
+- name: Configure UFW default policies
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  with_items:
+    - { direction: 'incoming', policy: 'deny' }
+    - { direction: 'outgoing', policy: 'allow' }
+
+- name: Allow HTTP traffic
+  community.general.ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+
+- name: Allow HTTPS traffic
+  community.general.ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled

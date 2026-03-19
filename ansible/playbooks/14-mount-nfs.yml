@@ -1,0 +1,13 @@
+---
+- name: NFS mounts configuration
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+    ansible_port: "{{ prod_ssh_port }}"
+  roles:
+    - role: mount-nfs
+      tags: ['nfs']
+

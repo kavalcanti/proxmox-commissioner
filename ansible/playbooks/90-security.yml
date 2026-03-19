@@ -1,0 +1,14 @@
+### ==== Security Playbook ==== ###
+#                                 #
+# Run only once after OS install  #
+# Wrapper for initial playbooks   #
+#                                 #
+### =========================== ###
+
+---
+- name: Initial security configuration
+  import_playbook: 00-initial.yml
+  tags: ['restart']
+- name: Base security
+  import_playbook: 10-base-security.yml
+  tags: ['restart']
