@@ -1,6 +1,6 @@
 # Proxmox Commissioner
-[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/kavalcanti/lab-provisioning/blob/main/README.md)
-[![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](https://github.com/kavalcanti/lab-provisioning/blob/main/README.pt-br.md)
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/kavalcanti/proxmox-commissioner/blob/main/README.md)
+[![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](https://github.com/kavalcanti/proxmox-commissioner/blob/main/README.pt-br.md)
 
 ## O que e o Proxmox Commissioner?
 
