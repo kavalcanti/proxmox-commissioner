@@ -1,8 +1,9 @@
 # Proxmox Commissioner
-[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/kavalcanti/lab-provisioning/blob/main/README.md)
-[![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](https://github.com/kavalcanti/lab-provisioning/blob/main/README.pt-br.md)
 
-## What is this Proxmox Commissioner?
+[en](https://github.com/kavalcanti/lab-provisioning/blob/main/README.md)
+[pt-br](https://github.com/kavalcanti/lab-provisioning/blob/main/README.pt-br.md)
+
+## What is Proxmox Commissioner?
 
 A Terraform and Ansible tool to streamline services running on Proxmox Virtual Environment virtual machines.
 
@@ -26,12 +27,15 @@ Simply create a new service from template from the project root dir and run the 
 bash scripts/new-service-from-template.sh service-name
 bash configs/services/service-name/deploy-service.sh
 ```
+
 This will create a VM with the default configuration:
+
 - 1vCPU
 - 1GB ram
-- 16gb HDD 
+- 16gb HDD
 
 From here a series of Ansible playbooks and roles can:
+
 - Add non-root user
 - Harden SSH config
 - Install Docker and docker compose
@@ -90,3 +94,4 @@ scripts/
   service-push.sh                     # Push files + (optional) docker compose deploy
   lib/common.sh                       # Shared helpers
 ```
+
