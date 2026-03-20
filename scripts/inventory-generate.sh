@@ -66,13 +66,19 @@ all:
             vars:
                 services_dir: "${SERVICES_DIR}"
                 service_name: "${SERVICE}"
-                docker_users:
-                    - "{{ user_devops }}"
+                # Uncomment for docker hosting VMs
+                # docker_users:
+                #     - "{{ user_devops }}"
                 # Uncomment and fill in the following variables to configure additional packages to install on the remote host(s).
                 # additional_packages:
                 #     - "package-a"
                 #     - "package-b"
                 #     - "package-c"
+                # Uncomment and fill in the following variables to enable additional services on the remote host(s).
+                # additional_services:
+                #     - "service-a"
+                #     - "service-b"
+                #     - "service-c"
                 # Uncomment and fill in the sites to enable on the remote host(s).
                 # nginx_sites_enabled_configs:
                 #     - "site-a-config.conf"

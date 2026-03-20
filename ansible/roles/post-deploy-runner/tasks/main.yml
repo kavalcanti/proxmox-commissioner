@@ -1,0 +1,40 @@
+---
+- name: Set post-deploy script paths
+  ansible.builtin.set_fact:
+    _post_deploy_script_src: "{{ services_dir }}/{{ service_name }}/post-deploy.sh"
+    _post_deploy_script_dst: "/tmp/{{ service_name }}-post-deploy.sh"
+
+- name: Check post-deploy script exists on controller
+  ansible.builtin.stat:
+    path: "{{ _post_deploy_script_src }}"
+  delegate_to: localhost
+  become: false
+  register: _post_deploy_script_stat
+
+- name: Skip post-deploy when script is missing
+  ansible.builtin.debug:
+    msg: "Skipping post-deploy: script not found at {{ _post_deploy_script_src }}"
+  when: not _post_deploy_script_stat.stat.exists
+
+- name: Run service post-deploy script when present
+  when: _post_deploy_script_stat.stat.exists
+  block:
+    - name: Upload post-deploy script to remote host
+      ansible.builtin.copy:
+        src: "{{ _post_deploy_script_src }}"
+        dest: "{{ _post_deploy_script_dst }}"
+        mode: "0755"
+
+    - name: Execute post-deploy script
+      ansible.builtin.command:
+        cmd: "{{ _post_deploy_script_dst }}"
+      become: true
+      # This script is intentionally imperative and may apply non-idempotent changes.
+      changed_when: true
+
+  always:
+    - name: Remove remote post-deploy script
+      ansible.builtin.file:
+        path: "{{ _post_deploy_script_dst }}"
+        state: absent
+      become: true
