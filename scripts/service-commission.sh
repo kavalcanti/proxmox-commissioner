@@ -4,11 +4,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-source_local_paths
 require_service "${1:-}"
 
 SERVICE="${1}"
-load_config "${SERVICE}"
+source_config "${SERVICE}"
 
 TERRAFORM_SERVICE_DIR="${PROJECT_ROOT}/config/services/${SERVICE}/terraform"
 

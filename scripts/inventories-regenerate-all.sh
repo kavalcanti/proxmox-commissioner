@@ -4,8 +4,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-source_local_paths
-
 SERVICE="${1:-}"
 SERVICES_DIR="${CONFIG_DIR}/services"
 

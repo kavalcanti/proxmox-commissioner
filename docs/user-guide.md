@@ -145,27 +145,6 @@ bash scripts/inventories-regenerate-all.sh
 bash scripts/run-playbook.sh service-name 15-web-server.yml
 ```
 
-#### Special use cases
-
-- Run baseline VM hardening/security playbook.
-```bash
-bash scripts/secure-vm.sh service-name
-```
-
-- Mount NFS shares defined in inventory vars.
-```bash
-bash scripts/mount-nfs.sh service-name
-```
-
-- Install Nginx (web server) on a service VM.
-```bash
-bash scripts/install-nginx.sh service-name
-```
-
-- Install Docker on a service VM.
-```bash
-bash scripts/install-docker.sh service-name
-```
 ## Default Configurations
 
 ### Default Terraform configuration and VM specs

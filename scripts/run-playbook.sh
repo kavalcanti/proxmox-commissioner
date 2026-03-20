@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-source_local_paths
+require_service "${1:-}"
 
 SERVICE="${1}"
 PLAYBOOK="${2}"
@@ -18,7 +18,7 @@ fi
 
 require_service "${SERVICE}"
 
-load_config "${SERVICE}"
+source_config "${SERVICE}"
 get_terraform_outputs "${SERVICE}"
 
 echo "=== Running playbook ${PLAYBOOK} ==="

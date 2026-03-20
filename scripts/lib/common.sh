@@ -9,3 +9,6 @@ source "${LIB_DIR}/configs.sh"
 source "${LIB_DIR}/terraform_ops.sh"
 source "${LIB_DIR}/vm_ops.sh"
 source "${LIB_DIR}/ansible_ops.sh"
+
+# Bootstrap project paths so callers don't have to
+source_local_paths

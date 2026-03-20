@@ -4,11 +4,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-source_local_paths
-
 SERVICE="${1}"
 require_service "${SERVICE}"
-load_config "${SERVICE}"
+source_config "${SERVICE}"
 
 get_terraform_outputs "${SERVICE}"
 echo "Updating Ansible inventory for ${SERVICE}..."

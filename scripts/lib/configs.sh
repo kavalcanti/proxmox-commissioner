@@ -17,17 +17,17 @@ source_local_paths() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     export PROJECT_ROOT="$(cd "${script_dir}/../../" && pwd)"
+    init_project_paths "${PROJECT_ROOT}"
     source "${PROJECT_ROOT}/config/defaults/local.env"
     if [[ -z "${SERVICES_DIR}" ]]; then
         export SERVICES_DIR="${CONFIG_DIR}/services"
     fi
-    init_project_paths "${PROJECT_ROOT}"
 }
-# Load configuration files with per-service layering.
+# Explicity sources configuration files with per-service layering.
 #   1. Ansible config     (config/defaults/local.env)
 #   2. Terraform/Proxmox  (config/defaults/terraform/infrastructure.env)
 #   3. Service overrides (config/services/<service>/<service>.infrastructure.env)
-load_config() {
+source_config() {
     local service="${1}"
 
     source "${CONFIG_DIR}/defaults/local.env"
