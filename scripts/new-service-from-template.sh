@@ -53,18 +53,21 @@ SERVICE="${1}"
 
 if [[ ! "${SERVICE}" =~ [^[:space:]] ]]; then
     echo "Error: Service name must not be empty or whitespace-only." >&2
+    print_help >&2
     exit 1
 fi
 
 # Reject path traversal and unsafe characters
 if [[ "${SERVICE}" == */* || "${SERVICE}" == *..* || "${SERVICE}" == .* || "${SERVICE}" == *. ]]; then
     echo "Error: Service name must not contain '/', '..', or lead/end with '.'." >&2
+    print_help >&2
     exit 1
 fi
 
 # Optional: restrict to hostname-friendly pattern [a-z0-9][a-z0-9-]*
 if [[ ! "${SERVICE}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
     echo "Error: Service name must match [a-z0-9][a-z0-9-]* (e.g. my-service)." >&2
+    print_help >&2
     exit 1
 fi
 
@@ -73,12 +76,14 @@ TARGET_DIR="${SERVICES_DIR}/${SERVICE}"
 
 if [[ ! -d "${TEMPLATE_DIR}" ]]; then
     echo "Error: Template not found at ${TEMPLATE_DIR}" >&2
+    print_help >&2
     exit 1
 fi
 
 if [[ -d "${TARGET_DIR}" ]]; then
     echo "Error: Service '${SERVICE}' already exists at ${TARGET_DIR}" >&2
     echo "Choose a different name or remove the existing directory." >&2
+    print_help >&2
     exit 1
 fi
 
@@ -97,7 +102,7 @@ else
     mv "${TARGET_DIR}/service-template.infrastructure.env.example" "${TARGET_DIR}/${SERVICE}.infrastructure.env"
 fi
 rm "${TARGET_DIR}/ansible/.gitkeep"
-rm "${TARGET_DIR}/filesystem/.gitkeep"
+rm "${TARGET_DIR}/filetree/.gitkeep"
 
 # Replace service-template placeholder with the new service name in the new directory only
 for f in "${TARGET_DIR}/${SERVICE}.infrastructure.env" "${TARGET_DIR}/deploy-service.sh"; do
