@@ -4,8 +4,39 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
+print_help() {
+    cat <<EOF
+Usage: $(basename "$0") <service> <destination-node> [destination-node-ip]
+
+Live migrate a provisioned service VM to another Proxmox node.
+
+Arguments:
+  service              Service name under config/services/
+  destination-node     Target Proxmox node name
+  destination-node-ip  Optional target Proxmox node IP
+
+Options:
+  -h, --help Show this help message and exit
+
+Example:
+  $(basename "$0") template-service pve02 192.168.0.12
+EOF
+}
+
+case "${1:-}" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+    -*)
+        echo "Error: Unknown option '${1}'" >&2
+        print_help >&2
+        exit 1
+        ;;
+esac
+
 if [[ -z "${1:-}" || -z "${2:-}" ]]; then
-    echo "Usage: $(basename "$0") <service> <destination-node> [destination-node-ip]" >&2
+    print_help >&2
     exit 1
 fi
 
@@ -37,6 +68,8 @@ echo "VM ID:   ${VM_ID}"
 echo ""
 
 eval $(ssh-agent)
+trap 'ssh-agent -k > /dev/null 2>&1' EXIT
+
 if [[ -n "${PROXMOX_SSH_KEY:-}" ]]; then
     ssh-add "${PROXMOX_SSH_KEY}"
 else
