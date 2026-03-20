@@ -7,13 +7,40 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
+print_help() {
+    cat <<EOF
+Usage: $(basename "$0") <service-name>
+
+Create a new service directory from the service template.
+
+Arguments:
+  service-name  New service identifier (pattern: [a-z0-9][a-z0-9-]*)
+
+Options:
+  -h, --help Show this help message and exit
+
+Example:
+  $(basename "$0") my-media-server
+EOF
+}
+
+case "${1:-}" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+    -*)
+        echo "Error: Unknown option '${1}'" >&2
+        print_help >&2
+        exit 1
+        ;;
+esac
+
 # ------------------------------------------------------------------------------
 # Arguments
 # ------------------------------------------------------------------------------
 if [[ -z "${1:-}" ]]; then
-    echo "Usage: $(basename "$0") <service-name>" >&2
-    echo "" >&2
-    echo "Example: $(basename "$0") my-media-server" >&2
+    print_help >&2
     exit 1
 fi
 

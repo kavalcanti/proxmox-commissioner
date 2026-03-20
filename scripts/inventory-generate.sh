@@ -4,6 +4,35 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
+print_help() {
+    cat <<EOF
+Usage: $(basename "$0") <service>
+
+Generate or refresh the Ansible inventory for one service.
+
+Arguments:
+  service    Service name under config/services/
+
+Options:
+  -h, --help Show this help message and exit
+
+Example:
+  $(basename "$0") template-service
+EOF
+}
+
+case "${1:-}" in
+    -h|--help)
+        print_help
+        exit 0
+        ;;
+    -*)
+        echo "Error: Unknown option '${1}'" >&2
+        print_help >&2
+        exit 1
+        ;;
+esac
+
 SERVICE="${1}"
 require_service "${SERVICE}"
 source_config "${SERVICE}"
