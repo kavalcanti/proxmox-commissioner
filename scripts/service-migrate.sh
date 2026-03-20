@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-init_directories
+source_local_paths
 
 if [[ -z "${1:-}" || -z "${2:-}" ]]; then
     echo "Usage: $(basename "$0") <service> <destination-node> [destination-node-ip]" >&2

@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-init_directories
+source_local_paths
 
 SERVICE="${1}"
 require_service "${SERVICE}"
@@ -13,7 +13,7 @@ load_config "${SERVICE}"
 get_terraform_outputs "${SERVICE}"
 echo "Updating Ansible inventory for ${SERVICE}..."
 
-inventory_file="${CONFIG_DIR}/services/${SERVICE}/ansible/${SERVICE}.inventory.yml"
+inventory_file="${SERVICES_DIR}/${SERVICE}/ansible/${SERVICE}.inventory.yml"
 if [[ -f "${inventory_file}" ]]; then
     cp "${inventory_file}" "${inventory_file}.backup"
 fi
@@ -37,6 +37,7 @@ all:
                     ansible_become_password: "{{ vault_devops_password }}"
                     sys_hostname: "${VM_NAME}"
             vars:
+                services_dir: "${SERVICES_DIR}"
                 service_name: "${SERVICE}"
                 docker_users:
                     - "{{ user_devops }}"

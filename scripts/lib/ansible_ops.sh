@@ -11,7 +11,7 @@ run_ansible_playbook() {
     source "${CONFIG_DIR}/defaults/local.env"
     local base_vars="${CONFIG_DIR}/defaults/ansible/base.yml"
     local vault_vars="${CONFIG_DIR}/defaults/ansible/vault.yml"
-    local inventory="${CONFIG_DIR}/services/${service}/ansible/${service}.inventory.yml"
+    local inventory="${SERVICES_DIR}/${service}/ansible/${service}.inventory.yml"
 
     local cmd=(ansible-playbook "${playbook_path}"
         -e "@${base_vars}"

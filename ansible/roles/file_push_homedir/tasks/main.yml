@@ -1,7 +1,7 @@
 ---
 - name: Set home directory source path
   ansible.builtin.set_fact:
-    _homedir_src: "{{ project_root }}/config/services/{{ service_name }}/filesystem/home/"
+    _homedir_src: "{{ services_dir }}/{{ service_name }}/filetree/home/"
 
 - name: Check home directory source exists
   ansible.builtin.stat:

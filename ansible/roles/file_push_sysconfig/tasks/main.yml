@@ -1,7 +1,7 @@
 ---
 - name: Set filesystem source path
   ansible.builtin.set_fact:
-    _sysconfig_base: "{{ project_root }}/config/services/{{ service_name }}/filesystem"
+    _sysconfig_base: "{{ services_dir }}/{{ service_name }}/filetree"
 
 - name: Find top-level directories excluding home
   ansible.builtin.find:

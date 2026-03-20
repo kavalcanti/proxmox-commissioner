@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-init_directories
+source_local_paths
 
 # ------------------------------------------------------------------------------
 # Arguments
@@ -25,6 +25,7 @@ SERVICE="${1}"
 # Validation
 # ------------------------------------------------------------------------------
 # Reject empty or whitespace-only
+
 if [[ ! "${SERVICE}" =~ [^[:space:]] ]]; then
     echo "Error: Service name must not be empty or whitespace-only." >&2
     exit 1
@@ -43,7 +44,7 @@ if [[ ! "${SERVICE}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
 fi
 
 TEMPLATE_DIR="${CONFIG_DIR}/defaults/services/service-template"
-TARGET_DIR="${CONFIG_DIR}/services/${SERVICE}"
+TARGET_DIR="${SERVICES_DIR}/${SERVICE}"
 
 if [[ ! -d "${TEMPLATE_DIR}" ]]; then
     echo "Error: Template not found at ${TEMPLATE_DIR}" >&2

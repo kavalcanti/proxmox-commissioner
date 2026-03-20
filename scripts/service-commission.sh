@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 
-init_directories
+source_local_paths
 require_service "${1:-}"
 
 SERVICE="${1}"
