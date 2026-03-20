@@ -145,27 +145,6 @@ bash scripts/inventories-regenerate-all.sh
 bash scripts/run-playbook.sh service-name 15-web-server.yml
 ```
 
-#### Casos especiais de uso
-
-- Executar playbook base de hardening/seguranca da VM.
-```bash
-bash scripts/secure-vm.sh service-name
-```
-
-- Montar compartilhamentos NFS definidos nas variaveis do inventario.
-```bash
-bash scripts/mount-nfs.sh service-name
-```
-
-- Instalar Nginx (web server) em uma VM de servico.
-```bash
-bash scripts/install-nginx.sh service-name
-```
-
-- Instalar Docker em uma VM de servico.
-```bash
-bash scripts/install-docker.sh service-name
-```
 ## Configuracoes padrao
 
 ### Configuracao Terraform padrao e especificacoes de VM
