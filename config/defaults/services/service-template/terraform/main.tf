@@ -1,5 +1,5 @@
 module "vm" {
-  source = "../../../../terraform/modules/proxmox-vm"
+  source = "__PROXMOX_VM_MODULE_SOURCE__"
 
   proxmox_node = var.proxmox_node
 

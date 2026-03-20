@@ -11,7 +11,7 @@ Usage: $(basename "$0") <service>
 Provision a service VM with Terraform and optionally migrate it.
 
 Arguments:
-  service    Service name under config/services/
+  service    Service name under services directory
 
 Options:
   -h, --help Show this help message and exit
@@ -38,7 +38,7 @@ require_service "${1:-}"
 SERVICE="${1}"
 source_config "${SERVICE}"
 
-TERRAFORM_SERVICE_DIR="${PROJECT_ROOT}/config/services/${SERVICE}/terraform"
+TERRAFORM_SERVICE_DIR="$(get_service_terraform_dir "${SERVICE}")"
 
 if [[ ! -d "${TERRAFORM_SERVICE_DIR}" ]]; then
     echo "Error: No Terraform root for service '${SERVICE}'" >&2

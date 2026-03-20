@@ -4,7 +4,8 @@
 # Get terraform outputs for a service and export VM_NAME / VM_IP
 get_terraform_outputs() {
     local service="${1}"
-    local terraform_dir="${SERVICES_DIR}/${service}/terraform"
+    local terraform_dir
+    terraform_dir="$(get_service_terraform_dir "${service}")"
 
     if [[ ! -d "${terraform_dir}" ]]; then
         echo "Error: No Terraform root for service '${service}'" >&2
@@ -36,7 +37,8 @@ get_terraform_outputs() {
 # Use when the VM may be down or unreachable.
 get_terraform_outputs_for_destroy() {
     local service="${1}"
-    local terraform_dir="${SERVICES_DIR}/${service}/terraform"
+    local terraform_dir
+    terraform_dir="$(get_service_terraform_dir "${service}")"
 
     if [[ ! -d "${terraform_dir}" ]]; then
         echo "Error: No Terraform root for service '${service}'" >&2

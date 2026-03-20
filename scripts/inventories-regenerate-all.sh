@@ -11,7 +11,7 @@ Usage: $(basename "$0") [service]
 Regenerate Ansible inventories for all services or a single service.
 
 Arguments:
-  service    Optional service name under config/services/
+  service    Optional service name under services directory
 
 Options:
   -h, --help Show this help message and exit
@@ -35,7 +35,6 @@ case "${1:-}" in
 esac
 
 SERVICE="${1:-}"
-SERVICES_DIR="${CONFIG_DIR}/services"
 
 if [[ -n "${SERVICE}" ]] && [[ ! -d "${SERVICES_DIR}/${SERVICE}" ]]; then
     echo "Error: No Configuration for service '${SERVICE}'" >&2

@@ -12,6 +12,15 @@ init_project_paths() {
     export CONFIG_DIR TERRAFORM_DIR ANSIBLE_DIR SCRIPTS_DIR
 }
 
+# Returns the terraform working directory for a service.
+# Uses TERRAFORM_DIR basename so the leaf folder is env-derived.
+get_service_terraform_dir() {
+    local service="${1}"
+    local terraform_leaf
+    terraform_leaf="$(basename "${TERRAFORM_DIR}")"
+    echo "${SERVICES_DIR}/${service}/${terraform_leaf}"
+}
+
 # Exports PROJECT_ROOT & SERVICES_DIR
 source_local_paths() {
     local script_dir
@@ -26,7 +35,7 @@ source_local_paths() {
 # Explicity sources configuration files with per-service layering.
 #   1. Ansible config     (config/defaults/local.env)
 #   2. Terraform/Proxmox  (config/defaults/terraform/infrastructure.env)
-#   3. Service overrides (config/services/<service>/<service>.infrastructure.env)
+#   3. Service overrides (${SERVICES_DIR}/<service>/<service>.infrastructure.env)
 source_config() {
     local service="${1}"
 
@@ -47,7 +56,7 @@ require_service() {
         echo "Usage: $(basename "$0") <service>" >&2
         echo "" >&2
         echo "Available services:" >&2
-        for dir in "${PROJECT_ROOT}/config/services"/*/; do
+        for dir in "${SERVICES_DIR}"/*/; do
             [[ -d "${dir}" ]] && echo "  $(basename "${dir}")" >&2
         done
         exit 1

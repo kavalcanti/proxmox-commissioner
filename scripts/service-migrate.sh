@@ -11,7 +11,7 @@ Usage: $(basename "$0") <service> <destination-node> [destination-node-ip]
 Live migrate a provisioned service VM to another Proxmox node.
 
 Arguments:
-  service              Service name under config/services/
+  service              Service name under services directory
   destination-node     Target Proxmox node name
   destination-node-ip  Optional target Proxmox node IP
 
@@ -47,7 +47,7 @@ DEST_NODE_IP="${3:-}"
 require_service "${SERVICE}"
 source_config "${SERVICE}"
 
-TERRAFORM_SERVICE_DIR="${PROJECT_ROOT}/config/services/${SERVICE}/terraform"
+TERRAFORM_SERVICE_DIR="$(get_service_terraform_dir "${SERVICE}")"
 if [[ ! -d "${TERRAFORM_SERVICE_DIR}" ]]; then
     echo "Error: No Terraform root for service '${SERVICE}'" >&2
     echo "Expected: ${TERRAFORM_SERVICE_DIR}/" >&2

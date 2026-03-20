@@ -38,7 +38,7 @@ require_service "${1:-}"
 SERVICE="${1}"
 source_config "${SERVICE}"
 
-TERRAFORM_SERVICE_DIR="${CONFIG_DIR}/services/${SERVICE}/terraform"
+TERRAFORM_SERVICE_DIR="$(get_service_terraform_dir "${SERVICE}")"
 
 if [[ ! -d "${TERRAFORM_SERVICE_DIR}" ]]; then
     echo "Error: No Terraform root for service '${SERVICE}'" >&2

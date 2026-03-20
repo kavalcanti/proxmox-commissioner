@@ -68,6 +68,12 @@ all:
                 service_name: "${SERVICE}"
                 docker_users:
                     - "{{ user_devops }}"
+                # Uncomment and fill in the sites to enable on the remote host(s).
+                # nginx_sites_enabled_configs:
+                #     - "site-a-config.conf"
+                #     - "site-b-config.conf"
+                #     - "site-c-config.conf"
+                # Uncomment and fill in the following variables to configure NFS mounts on the remote host(s).
                 # nfs_mountpoints:
                 #     # List of NFS mounts to configure on the remote host(s)
                 #     - name: ""

@@ -104,12 +104,24 @@ fi
 rm "${TARGET_DIR}/ansible/.gitkeep"
 rm "${TARGET_DIR}/filetree/.gitkeep"
 
-# Replace service-template placeholder with the new service name in the new directory only
+# Resolve Terraform module source relative to service terraform root.
+module_dir="${TERRAFORM_DIR}/modules/proxmox-vm"
+if [[ ! -d "${module_dir}" ]]; then
+    echo "Error: Terraform module not found at ${module_dir}" >&2
+    exit 1
+fi
+module_source="${module_dir}"
+
+# Replace template placeholders with concrete values in the new service directory only
 for f in "${TARGET_DIR}/${SERVICE}.infrastructure.env" "${TARGET_DIR}/deploy-service.sh"; do
     if [[ -f "${f}" ]]; then
         sed -i "s/service-template/${SERVICE}/g" "${f}"
     fi
 done
+
+if [[ -f "${TARGET_DIR}/terraform/main.tf" ]]; then
+    sed -i "s#__PROXMOX_VM_MODULE_SOURCE__#${module_source}#g" "${TARGET_DIR}/terraform/main.tf"
+fi
 
 # ------------------------------------------------------------------------------
 # Output
