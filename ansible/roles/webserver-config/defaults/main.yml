@@ -1,14 +1,10 @@
 ---
 # Certificate settings for the lab wildcard cert.
 # These defaults match the requested role behavior.
-webserver_cert_name: "underspace-network"
-webserver_cert_email: "admin@underspace.network"
-webserver_cert_domain_wildcard: "*.underspace.network"
 
 # Nginx site config filenames (under /etc/nginx/sites-available/)
 # that should be enabled via links into /etc/nginx/sites-enabled/.
-nginx_sites_enabled_configs:
-  - "radarr-underspace-network.conf"
+# nginx_sites_enabled_configs:
 
 # Certbot Cloudflare DNS-01 credentials file.
 webserver_cloudflare_credentials_path: "/etc/letsencrypt/cloudflare.ini"

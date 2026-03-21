@@ -1,0 +1,16 @@
+### ==== Additional systemd services ==== ###
+# Enables and starts units listed in inventory `additional_services` (see inventory-generate.sh).
+
+---
+- name: Enable additional services on the machine.
+  hosts: servers
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_password: "{{ vault_devops_password }}"
+    ansible_port: "{{ prod_ssh_port }}"
+
+  roles:
+    - role: enable-additional-services
+      tags: ['additional-services']

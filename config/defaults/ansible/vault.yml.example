@@ -11,7 +11,9 @@ vault_new_root_password: "new_root_password"
 # Sudo password for new user and privilege escalation
 vault_devops_password: "devops_password"
 
-# Additional secrets can be added here
-# vault_additional_secret: "secret_value_here" 
+# Webserver Configuration - For TLS certificates with certbot
+webserver_cert_name: "name-for-cert" # usually domain-name
+webserver_cert_email: "email@example.com" # email for certbot
+webserver_cert_domain_wildcard: "*.example.com" 
 
 vault_cloudflare_api_token: "cloudflare_api_token"
