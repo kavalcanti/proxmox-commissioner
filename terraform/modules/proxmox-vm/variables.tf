@@ -205,3 +205,9 @@ variable "ssh_public_key" {
   type        = string
   default     = ""
 }
+
+variable "remove_distro_cloud_user" {
+  description = "If non-empty, cloud-init runcmd removes this account after first boot (Debian cloud images create 'debian' as UID 1000; removing it leaves 1000 for the next user, e.g. devops). Set to \"\" to keep the distro default user."
+  type        = string
+  default     = "debian"
+}

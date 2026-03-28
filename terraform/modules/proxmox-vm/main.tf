@@ -62,11 +62,12 @@ resource "proxmox_virtual_environment_file" "cloud_config" {
 
   source_raw {
     data = templatefile("${path.module}/templates/user_data.yaml.tftpl", {
-      root_password   = var.root_password
-      ssh_pwauth      = var.ssh_pwauth
-      disable_root    = var.disable_root
-      package_update  = var.package_update
-      package_upgrade = var.package_upgrade
+      root_password              = var.root_password
+      ssh_pwauth                 = var.ssh_pwauth
+      disable_root               = var.disable_root
+      package_update             = var.package_update
+      package_upgrade            = var.package_upgrade
+      remove_distro_cloud_user   = var.remove_distro_cloud_user
     })
 
     file_name = "cloud-init-${var.vm_name}.yaml"

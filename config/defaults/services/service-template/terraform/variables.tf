@@ -223,3 +223,9 @@ variable "ssh_public_key" {
   type        = string
   default     = ""
 }
+
+variable "remove_distro_cloud_user" {
+  description = "Remove this cloud-image default user on first boot (default debian). Empty string keeps it."
+  type        = string
+  default     = "debian"
+}

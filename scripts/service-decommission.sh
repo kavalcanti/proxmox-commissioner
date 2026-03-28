@@ -47,6 +47,7 @@ if [[ ! -d "${TERRAFORM_SERVICE_DIR}" ]]; then
 fi
 
 cd "${TERRAFORM_SERVICE_DIR}" || exit 1
+ensure_proxmox_vm_module_symlink "${TERRAFORM_SERVICE_DIR}" || exit 1
 
 # Ensure we have terraform state (service was provisioned)
 if ! terraform output vm_id &>/dev/null; then

@@ -22,11 +22,15 @@ get_service_terraform_dir() {
 }
 
 # Exports PROJECT_ROOT & SERVICES_DIR
+# Order: init paths (local.env needs CONFIG_DIR / ANSIBLE_DIR), default SERVICES_DIR,
+# then source local.env so explicit exports in local.env always win. init_project_paths
+# never reads SERVICES_DIR — only local.env and the default below set it.
 source_local_paths() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     export PROJECT_ROOT="$(cd "${script_dir}/../../" && pwd)"
     init_project_paths "${PROJECT_ROOT}"
+    export SERVICES_DIR="${CONFIG_DIR}/services"
     source "${PROJECT_ROOT}/config/defaults/local.env"
     if [[ -z "${SERVICES_DIR}" ]]; then
         export SERVICES_DIR="${CONFIG_DIR}/services"

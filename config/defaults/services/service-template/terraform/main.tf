@@ -1,5 +1,6 @@
 module "vm" {
-  source = "__PROXMOX_VM_MODULE_SOURCE__"
+  # Symlink proxmox-vm-module → commissioner terraform/modules/proxmox-vm (refreshed by scripts).
+  source = "./proxmox-vm-module"
 
   proxmox_node = var.proxmox_node
 
@@ -31,7 +32,8 @@ module "vm" {
   package_update    = var.package_update
   package_upgrade   = var.package_upgrade
   ssh_pwauth        = var.ssh_pwauth
-  disable_root      = var.disable_root
-  root_password     = var.root_password
-  ssh_public_key    = var.ssh_public_key
+  disable_root               = var.disable_root
+  root_password              = var.root_password
+  ssh_public_key             = var.ssh_public_key
+  remove_distro_cloud_user   = var.remove_distro_cloud_user
 }

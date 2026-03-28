@@ -22,6 +22,9 @@ write_files:
 
 # Backup: Force SSH config changes
 runcmd:
+%{ if remove_distro_cloud_user != "" ~}
+  - /usr/sbin/userdel -rf ${remove_distro_cloud_user} || true
+%{ endif ~}
   - systemctl restart sshd
   - systemctl start qemu-guest-agent
   - systemctl enable qemu-guest-agent

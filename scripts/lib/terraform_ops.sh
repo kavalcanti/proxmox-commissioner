@@ -1,6 +1,23 @@
 #!/bin/bash
 # Terraform operation helpers for lab-provisioning scripts
 
+# Name of the symlink in each service terraform root → shared proxmox-vm module.
+PROXMOX_VM_MODULE_LINK_NAME="proxmox-vm-module"
+
+# Point ./${PROXMOX_VM_MODULE_LINK_NAME} at this checkout's module so services work
+# from any SERVICES_DIR (external trees, symlinks, etc.) without fragile ../ paths.
+ensure_proxmox_vm_module_symlink() {
+    local terraform_dir="${1}"
+    local module_src="${TERRAFORM_DIR}/modules/proxmox-vm"
+    local link="${terraform_dir}/${PROXMOX_VM_MODULE_LINK_NAME}"
+
+    if [[ ! -d "${module_src}" ]]; then
+        echo "Error: Proxmox VM module not found at ${module_src}" >&2
+        return 1
+    fi
+    ln -sfn "${module_src}" "${link}"
+}
+
 # Get terraform outputs for a service and export VM_NAME / VM_IP
 get_terraform_outputs() {
     local service="${1}"
@@ -12,6 +29,8 @@ get_terraform_outputs() {
         echo "Expected: ${terraform_dir}/" >&2
         exit 1
     fi
+
+    ensure_proxmox_vm_module_symlink "${terraform_dir}" || exit 1
 
     cd "${terraform_dir}" || {
         echo "Error: Cannot access terraform directory: ${terraform_dir}" >&2
@@ -45,6 +64,8 @@ get_terraform_outputs_for_destroy() {
         echo "Expected: ${terraform_dir}/" >&2
         exit 1
     fi
+
+    ensure_proxmox_vm_module_symlink "${terraform_dir}" || exit 1
 
     cd "${terraform_dir}" || {
         echo "Error: Cannot access terraform directory: ${terraform_dir}" >&2
