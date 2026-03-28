@@ -1,0 +1,39 @@
+---
+# Add Cloudflare GPG key and cloudflared apt repository (see https://pkg.cloudflare.com/)
+- name: Create directory for Cloudflare apt keyrings
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Cloudflare package signing key
+  ansible.builtin.get_url:
+    url: https://pkg.cloudflare.com/cloudflare-public-v2.gpg
+    dest: /usr/share/keyrings/cloudflare-public-v2.gpg
+    mode: '0644'
+    force: true
+
+- name: Install python3-debian (required by deb822_repository on the managed host)
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+
+# deb822 .sources avoids apt_repository, which needs gpg/apt-key on the target (often absent on Debian 13)
+- name: Add Cloudflare cloudflared apt repository
+  ansible.builtin.deb822_repository:
+    name: cloudflared
+    types: deb
+    uris:
+      - https://pkg.cloudflare.com/cloudflared
+    suites:
+      - any
+    components:
+      - main
+    signed_by: /usr/share/keyrings/cloudflare-public-v2.gpg
+    state: present
+
+- name: Install cloudflared
+  ansible.builtin.apt:
+    name: cloudflared
+    state: present
+    update_cache: true
