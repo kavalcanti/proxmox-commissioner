@@ -14,7 +14,14 @@ TODO.md
 **/terraform.tfstate.*
 **/.terraform/
 **/.terraform.lock.hcl
+# Machine-local symlink to commissioner checkout (see ensure_proxmox_vm_module_symlink)
+**/terraform/proxmox-vm-module
 
 # Running services
 config/services/*/
-services/*/
+services/*
+!services/nginx/
+!services/nginx/**
+
+# AI slop maintenance
+agents/

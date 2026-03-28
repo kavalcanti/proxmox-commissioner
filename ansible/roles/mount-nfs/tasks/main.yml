@@ -36,4 +36,3 @@
         (item.options is string)
         | ternary(item.options, (item.options | default([]) | join(',')))
       }}
-
