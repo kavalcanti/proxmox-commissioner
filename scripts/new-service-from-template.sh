@@ -102,7 +102,7 @@ else
     mv "${TARGET_DIR}/service-template.infrastructure.env.example" "${TARGET_DIR}/${SERVICE}.infrastructure.env"
 fi
 rm "${TARGET_DIR}/ansible/.gitkeep"
-rm "${TARGET_DIR}/filetree/.gitkeep"
+rm -f "${TARGET_DIR}/filetree/.gitkeep"
 
 # Resolve Terraform module source relative to service terraform root.
 module_dir="${TERRAFORM_DIR}/modules/proxmox-vm"
