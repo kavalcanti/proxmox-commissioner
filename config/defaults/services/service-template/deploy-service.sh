@@ -15,4 +15,7 @@ bash ./scripts/run-playbook.sh service-template 10-base-security.yml
 bash ./scripts/run-playbook.sh service-template 25-file-push.yml
 bash ./scripts/run-playbook.sh service-template 27-post-deploy.yml
 
+# Optional: Prometheus Node Exporter (see config/defaults/ansible/base.yml for listen address / UFW).
+# bash ./scripts/run-playbook.sh service-template 23-node-exporter.yml
+
 # Run other playbooks or actions as needed
