@@ -143,6 +143,7 @@ bash scripts/inventories-regenerate-all.sh
 - Run a specific Ansible playbook against a service VM.
 ```bash
 bash scripts/run-playbook.sh service-name 15-web-server.yml
+bash scripts/run-playbook.sh service-name 23-node-exporter.yml
 ```
 
 ## Default Configurations
@@ -164,7 +165,7 @@ cp config/defaults/local.env.example config/defaults/local.env
 ```
 
 ### Variable structure
-- `config/defaults/ansible/base.yml`: Common non-sensitive Ansible variables
+- `config/defaults/ansible/base.yml`: Common non-sensitive Ansible variables (including Node Exporter listen address and optional UFW scrape rules for `23-node-exporter.yml`)
 - `config/defaults/ansible/vault.yml`: Encrypted sensitive variables (used via Ansible vault)
 - `config/services/<service>/ansible/inventory/<service>.deployment.yml`: Per-service inventory auto-generated from Terraform outputs
 
