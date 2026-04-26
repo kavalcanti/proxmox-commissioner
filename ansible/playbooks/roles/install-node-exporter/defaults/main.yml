@@ -1,0 +1,7 @@
+---
+# Node exporter listens here (--web.listen-address). Use 0.0.0.0:9100 only with a tight UFW from rule.
+node_exporter_listen_address: "127.0.0.1:9100"
+# When true, allow node_exporter_port/tcp from node_exporter_ufw_from only (required if open_ufw is true).
+node_exporter_open_ufw: false
+node_exporter_ufw_from: ""
+node_exporter_port: 9100

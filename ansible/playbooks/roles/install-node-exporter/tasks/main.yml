@@ -1,0 +1,37 @@
+---
+# Sensitive host metrics: default to loopback; expose only with UFW restricted to your scraper CIDR.
+- name: Install prometheus-node-exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    update_cache: true
+
+- name: Require scrape source CIDR when opening UFW for node exporter
+  ansible.builtin.assert:
+    that:
+      - node_exporter_ufw_from | default('') | trim | length > 0
+    fail_msg: "Set node_exporter_ufw_from (e.g. Prometheus LAN) when node_exporter_open_ufw is true."
+  when: node_exporter_open_ufw
+
+- name: Set node exporter listen address in defaults file
+  ansible.builtin.lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    regexp: '^ARGS='
+    line: 'ARGS="--web.listen-address={{ node_exporter_listen_address }}"'
+    mode: '0644'
+  notify: Restart prometheus node exporter
+
+- name: Allow Node Exporter scrape from configured source only
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_exporter_port | string }}"
+    proto: tcp
+    from_ip: "{{ node_exporter_ufw_from }}"
+  notify: Reload UFW
+  when: node_exporter_open_ufw
+
+- name: Enable and start prometheus-node-exporter
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true

@@ -25,4 +25,3 @@
     argv: "{{ _compose_up_argv }}"
   args:
     chdir: "{{ docker_deploy_compose_dir }}"
-
