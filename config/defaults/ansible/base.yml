@@ -24,6 +24,13 @@ ssh_key_dir: "~/.ssh/ansible_keys"
 ssh_private_key: "{{ ssh_key_dir }}/{{ sys_hostname }}"
 ssh_public_key: "{{ lookup('file', ssh_private_key + '.pub') }}"
 
+# Node Exporter (ansible/playbooks/23-node-exporter.yml)
+# Default loopback only; for remote scrape use 0.0.0.0:9100 and set node_exporter_open_ufw with node_exporter_ufw_from to your scraper CIDR.
+node_exporter_listen_address: "0.0.0.0:9100"
+node_exporter_open_ufw: true
+node_exporter_ufw_from: "172.20.30.0/24"
+node_exporter_port: 9100
+
 # Docker Configuration
 docker_users:
   - "{{ user_devops }}"
