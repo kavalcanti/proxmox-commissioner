@@ -1,0 +1,16 @@
+---
+### ==== Node Exporter Playbook ==== ###
+# Installs prometheus-node-exporter (metrics agent for Prometheus).
+# See config/defaults/ansible/base.yml for listen address and optional UFW scrape rules.
+
+- name: Install Node Exporter
+  hosts: servers
+  become: true
+  gather_facts: true
+  vars:
+    ansible_user: "{{ user_devops }}"
+    ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+    ansible_port: "{{ prod_ssh_port }}"
+  roles:
+    - role: install-node-exporter
+      tags: ['node_exporter', 'monitoring']

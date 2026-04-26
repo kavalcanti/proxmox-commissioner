@@ -14,4 +14,3 @@
       tags: ['file-push', 'sysconfig']
     - role: webserver-config
       tags: ['webserver-config']
-
