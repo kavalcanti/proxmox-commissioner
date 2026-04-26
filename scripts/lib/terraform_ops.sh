@@ -85,4 +85,3 @@ get_terraform_outputs_for_destroy() {
 
     export VM_NAME VM_ID
 }
-
