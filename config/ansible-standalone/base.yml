@@ -1,0 +1,29 @@
+---
+# Standalone Ansible defaults for single-VM runs.
+ansible_python_interpreter: /usr/bin/python3
+ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+# SSH and users
+ssh_port: 22
+prod_ssh_port: 4224
+user_devops: devops
+user_root: root
+user_devops_password: "{{ vault_devops_password }}"
+ansible_become_password: "{{ vault_devops_password }}"
+
+sys_hostname: beyondbett
+
+# SSH key path for standalone runs
+ssh_key_dir: "~/.ssh/ansible_keys"
+ssh_private_key: "{{ ssh_key_dir }}/{{ sys_hostname }}"
+ssh_public_key: "{{ lookup('file', ssh_private_key + '.pub') }}"
+
+# Node Exporter defaults
+node_exporter_listen_address: "0.0.0.0:9100"
+node_exporter_open_ufw: true
+node_exporter_ufw_from: "172.20.30.0/24"
+node_exporter_port: 9100
+
+# Docker defaults
+docker_users:
+  - "{{ user_devops }}"

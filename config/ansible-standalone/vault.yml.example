@@ -1,0 +1,11 @@
+---
+# Copy to config/ansible-standalone/vault.yml and encrypt with:
+# ansible-vault encrypt config/ansible-standalone/vault.yml
+
+# SSH / user credentials
+vault_root_password: "change-me"
+vault_new_root_password: "change-me"
+vault_devops_password: "change-me"
+
+# Optional service secrets used by some roles/playbooks
+vault_cloudflare_tunnel_token: "change-me"

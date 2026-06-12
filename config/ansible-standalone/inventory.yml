@@ -1,0 +1,12 @@
+---
+all:
+  vars:
+    ansible_connection: ssh
+  children:
+    servers:
+      hosts:
+        standalone_vm:
+          ansible_host: "__VM_IP__"
+          ansible_user: "{{ user_devops }}"
+          ansible_port: "{{ prod_ssh_port }}"
+          # ansible_ssh_private_key_file: "{{ ssh_private_key }}"
