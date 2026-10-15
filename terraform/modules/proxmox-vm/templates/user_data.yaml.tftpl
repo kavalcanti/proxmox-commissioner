@@ -1,38 +1,48 @@
 #cloud-config
-# Set root password explicitly
-chpasswd:
-  expire: false
-  list: |
-    root:${root_password}
+# Rendered by terraform/modules/proxmox-vm. Values go through jsonencode so
+# hashes and keys never need YAML quoting.
 
-# SSH Configuration
-ssh_pwauth: 1
-disable_root: 0
+hostname: ${jsonencode(hostname)}
+manage_etc_hosts: true
 
-# Configure SSH daemon settings
+# Root is locked and SSH is key-only; Ansible connects as the sudo user below.
+disable_root: true
+ssh_pwauth: false
+
+users:
+  - name: ${jsonencode(devops_user)}
+    gecos: "Managed by proxmox-commissioner"
+    groups: [sudo]
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: ${jsonencode(devops_password_hash)}
+    sudo: "ALL=(ALL) ALL"
+    ssh_authorized_keys:
+      - ${jsonencode(ssh_public_key)}
+
 write_files:
-  - path: /etc/ssh/sshd_config.d/99-cloud-init.conf
-    content: |
-      PasswordAuthentication yes
-      PermitRootLogin yes
-      ChallengeResponseAuthentication no
+  - path: /etc/ssh/sshd_config.d/10-pvc.conf
     owner: root:root
-    permissions: '0644'
-    defer: true
-
-# Backup: Force SSH config changes
-runcmd:
-%{ if remove_distro_cloud_user != "" ~}
-  - /usr/sbin/userdel -rf ${remove_distro_cloud_user} || true
-%{ endif ~}
-  - systemctl restart sshd
-  - systemctl start qemu-guest-agent
-  - systemctl enable qemu-guest-agent
+    permissions: "0644"
+    content: |
+      # Managed by proxmox-commissioner
+      Port ${ssh_port}
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
 
 packages:
   - python3
-  - python3-apt
   - qemu-guest-agent
+  - sudo
+  - ufw
 
-package_update: "{{ package_update }}"
-package_upgrade: "{{ package_upgrade }}"
+package_update: ${package_update}
+package_upgrade: ${package_upgrade}
+
+runcmd:
+%{ if remove_distro_user != "" ~}
+  - [ sh, -c, "id -u ${remove_distro_user} >/dev/null 2>&1 && /usr/sbin/userdel -rf ${remove_distro_user} || true" ]
+%{ endif ~}
+  - [ systemctl, restart, ssh ]
+  - [ systemctl, enable, --now, qemu-guest-agent ]

@@ -1,0 +1,45 @@
+---
+# A host-specific script wins over the service-wide one.
+- name: Look for post-deploy scripts on the controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  delegate_to: localhost
+  become: false
+  loop:
+    - "{{ service_dir }}/hosts/{{ host_key }}/post-deploy.sh"
+    - "{{ service_dir }}/post-deploy.sh"
+  register: _post_deploy_candidates
+
+- name: Pick the script to run
+  ansible.builtin.set_fact:
+    _post_deploy_script_src: >-
+      {{ (_post_deploy_candidates.results | selectattr('stat.exists') | map(attribute='item') | first) | default('') }}
+    _post_deploy_script_dst: "/tmp/{{ service_name }}-{{ host_key }}-post-deploy.sh"
+
+- name: Skip post-deploy when no script exists
+  ansible.builtin.debug:
+    msg: "Skipping post-deploy: no post-deploy.sh for host '{{ host_key }}'"
+  when: _post_deploy_script_src | length == 0
+
+- name: Run the post-deploy script
+  when: _post_deploy_script_src | length > 0
+  block:
+    - name: Upload post-deploy script to remote host
+      ansible.builtin.copy:
+        src: "{{ _post_deploy_script_src }}"
+        dest: "{{ _post_deploy_script_dst }}"
+        mode: "0755"
+
+    - name: Execute post-deploy script
+      ansible.builtin.command:
+        cmd: "{{ _post_deploy_script_dst }}"
+      become: true
+      # This script is intentionally imperative and may apply non-idempotent changes.
+      changed_when: true
+
+  always:
+    - name: Remove remote post-deploy script
+      ansible.builtin.file:
+        path: "{{ _post_deploy_script_dst }}"
+        state: absent
+      become: true

@@ -1,2 +1,0 @@
----
-file_push_homedir_remote_user: "{{ user_devops }}"

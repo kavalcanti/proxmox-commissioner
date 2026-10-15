@@ -1,0 +1,69 @@
+# Cluster-wide settings. `pvc init` copies this to site.yml (gitignored).
+# Anything a service does not set itself falls back to what is written here.
+
+proxmox:
+  endpoint: https://pve1.lan:8006/
+  # SSH user on the nodes. Terraform needs it to upload cloud-init snippets.
+  ssh_user: root
+  # Optional. Loaded into a throwaway ssh-agent for each run. Leave unset to use
+  # the ssh-agent already running in your shell.
+  # ssh_key: ~/.ssh/proxmox
+  insecure: true            # accept the self-signed certificate
+
+# Every node a service may use. VMs are created on their node directly (no template
+# to clone), and moving a host to another node in service.yml live-migrates it.
+nodes:
+  pve1:
+    address: 172.20.10.110
+  # pve2:
+  #   address: 172.20.10.111
+
+storage:
+  disk: local-lvm           # VM disks
+  snippets: local           # needs the "snippets" content type
+  cloudinit: local-lvm      # cloud-init drive
+  images: local             # needs the "iso" content type; cloud images land here
+
+network:
+  bridge: vmbr0
+  model: virtio
+  gateway: 172.20.30.1      # used by hosts with a static ip
+  nameservers: []           # e.g. [172.20.30.1]
+
+# Cloud images downloaded to every node by `pvc site apply`.
+images:
+  debian-13:
+    url: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
+
+ssh:
+  port: 4224                # final SSH port, set by cloud-init at first boot
+  user: devops              # sudo user Ansible connects as
+  key_dir: ~/.ssh/pvc       # one ed25519 key per service lives here
+
+vm:
+  qemu_agent: true
+  package_update: true
+  package_upgrade: false
+  disk_interface: scsi0
+  disk_discard: "on"
+  disk_format: raw          # use qcow2 only on file-based storage
+
+# Defaults for every host of every service. A service's own `defaults` and each host
+# override these, in that order.
+defaults:
+  cores: 1
+  sockets: 1
+  memory: 1024              # MB
+  disk: 16                  # GB
+  vlan: 0                   # 0 = untagged
+  image: debian-13
+  # node: pve1              # only needed when `nodes` lists more than one
+
+# Extra variables for every host's Ansible run (merged under host vars).
+ansible_vars:
+  node_exporter_listen_address: "0.0.0.0:9100"
+  node_exporter_open_ufw: true
+  node_exporter_ufw_from: "172.20.30.0/24"
+  # webserver_cert_name: example.com
+  # webserver_cert_email: you@example.com
+  # webserver_cert_domain_wildcard: "*.example.com"

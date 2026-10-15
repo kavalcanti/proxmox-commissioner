@@ -1,0 +1,124 @@
+---
+# One playbook for every service. `pvc` generates the inventory, which puts each
+# host in `role_base`, one `role_<name>` group per role in its manifest entry,
+# `svc_<service>` and `svc_<service>_<host>`. Use --limit, --tags or `pvc converge
+# --host` to narrow a run.
+#
+# VMs boot already hardened (cloud-init), so there is no bootstrap phase: every
+# play connects as the sudo user on the final SSH port with the service key.
+
+- name: Base hardening and packages
+  hosts: role_base
+  become: true
+  gather_facts: false
+  tags: [base]
+  pre_tasks:
+    - name: Wait for SSH to accept the service key
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+      tags: [always]
+
+    # apt is locked while cloud-init installs its first packages.
+    - name: Wait for cloud-init to finish
+      ansible.builtin.command: cloud-init status --wait
+      register: _cloud_init
+      changed_when: false
+      # 2 means "done with recoverable errors", e.g. one package mirror hiccup.
+      failed_when: _cloud_init.rc not in [0, 2]
+      tags: [always]
+  roles:
+    - role: sshd-config
+      tags: [ssh]
+    - role: autoupdates
+      tags: [autoupdates]
+    - role: fail2ban
+      tags: [fail2ban]
+    - role: install-additional-packages
+      tags: [packages]
+    - role: enable-additional-services
+      tags: [services]
+
+- name: NFS mounts
+  hosts: role_nfs
+  become: true
+  gather_facts: false
+  tags: [nfs]
+  roles:
+    - role: mount-nfs
+
+- name: Docker engine
+  hosts: role_docker
+  become: true
+  gather_facts: true
+  tags: [docker]
+  roles:
+    - role: docker-install
+
+- name: Nginx and certbot
+  hosts: role_nginx
+  become: true
+  gather_facts: false
+  tags: [nginx, webserver]
+  roles:
+    - role: webserver
+
+- name: Cloudflare Tunnel client
+  hosts: role_cloudflared
+  become: true
+  gather_facts: true
+  tags: [cloudflared]
+  roles:
+    - role: install-cloudflared
+
+- name: Prometheus Node Exporter
+  hosts: role_node_exporter
+  become: true
+  gather_facts: true
+  tags: [node_exporter, monitoring]
+  roles:
+    - role: install-node-exporter
+
+- name: Kubernetes
+  hosts: role_kubernetes
+  become: true
+  gather_facts: true
+  tags: [kubernetes]
+  roles:
+    - role: kubernetes
+
+# Runs after the software above so /etc/nginx and friends already exist.
+- name: Push service files
+  hosts: role_base
+  become: true
+  gather_facts: false
+  tags: [files]
+  roles:
+    # Runs as the sudo user so everything lands owned by it, as it always has.
+    - role: file_push_homedir
+      become: false
+    - role: file_push_sysconfig
+
+- name: Nginx sites and TLS certificates
+  hosts: role_nginx
+  become: true
+  gather_facts: false
+  tags: [nginx, webserver-config]
+  roles:
+    - role: webserver-config
+
+- name: Deploy docker compose stack
+  hosts: role_compose
+  become: false
+  gather_facts: false
+  tags: [compose]
+  roles:
+    - role: docker-deploy
+
+# Imperative scripts, so they only run when asked: pvc up --post-deploy.
+- name: Run post-deploy script
+  hosts: role_base
+  become: false
+  gather_facts: false
+  tags: [never, post_deploy]
+  roles:
+    - role: post-deploy-runner

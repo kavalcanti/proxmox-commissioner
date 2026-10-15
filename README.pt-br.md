@@ -1,92 +1,91 @@
 # Proxmox Commissioner
+
 [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/kavalcanti/proxmox-commissioner/blob/main/README.md)
 [![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](https://github.com/kavalcanti/proxmox-commissioner/blob/main/README.pt-br.md)
 
-## O que e o Proxmox Commissioner?
+## O que é o Proxmox Commissioner?
 
-Uma ferramenta com Terraform e Ansible para simplificar servicos rodando em maquinas virtuais no Proxmox Virtual Environment.
+Uma pequena CLI, `pvc`, que transforma um manifesto YAML em serviços rodando no Proxmox Virtual Environment. O Terraform cria as VMs, o Ansible as configura e o `pvc` liga os dois.
 
-Ela e voltada para quem faz homelab ou equipes pequenas que usam PVE.
+Ele é voltado para quem faz homelab e equipes pequenas que usam PVE.
 
 ### O que ele faz?
 
-1. Criar, configurar e proteger VMs
-2. Enviar e fazer deploy de stacks Docker completas com suporte a armazenamento remoto via NFS
-3. Enviar configuracoes e fazer deploy de Nginx com certificados DNS-01 do Cloudflare
-4. Adicionar ou remover servicos mantendo a configuracao
-5. Migrar VMs entre nos do cluster com praticidade
+1. Cria uma ou mais VMs por serviço (um banco de dados e um host de aplicação, por exemplo) a partir de um único arquivo
+2. Sobe toda VM já protegida: SSH somente com chave em porta customizada, root bloqueado, firewall e fail2ban ativos
+3. Instala Docker, nginx com certificados DNS-01 do Cloudflare, montagens NFS, Node Exporter e cloudflared
+4. Envia arquivos e faz deploy de stacks Docker Compose no host certo
+5. Move um host para outro nó do cluster mudando uma linha
 
-Ele provisiona Maquinas Virtuais em um cluster Proxmox e aplica configuracoes de seguranca e servico com Ansible. Cada **servico** (ex.: media stack, banco de dados, app web) tem seu proprio state do Terraform, diretorio de configuracao e ciclo de vida -- assim voce pode criar, proteger e configurar VMs de forma independente por servico.
+Não é necessária uma VM template. As imagens cloud são baixadas direto para cada nó.
 
-### Como ele faz?
-
-Basta criar um novo servico a partir do template, no diretorio raiz do projeto, e executar o script de deploy:
+### Como ele funciona?
 
 ```bash
-bash scripts/new-service-from-template.sh nome-do-servico
-bash configs/services/nome-do-servico/deploy-service.sh
+uv sync                          # instala o pvc
+uv run pvc init                  # cria site.yml e secrets.yml
+uv run pvc site apply            # baixa a imagem cloud para todos os nós
+uv run pvc new blog --hosts db,app
+uv run pvc up blog               # cria as VMs e as configura
 ```
-Isso cria uma VM com configuracao padrao:
-- 1 vCPU
-- 1 GB de RAM
-- 16 GB de disco
 
-A partir daqui, uma serie de playbooks e roles do Ansible pode:
-- Adicionar usuario nao-root
-- Melhorar a configuracao de segurança do SSH
-- Instalar Docker e Docker Compose
-- Instalar, configurar e fazer deploy do Nginx
-- Configurar compartilhamentos NFS
-- Copiar arquivos de configuracao
-- Fazer deploy de stacks Docker
+Um serviço é um arquivo, `services/blog/service.yml`:
+
+```yaml
+defaults:
+  node: pve1
+  vlan: 30
+  memory: 2048
+
+hosts:
+  db:
+    vm_id: 1101
+    ip: 172.20.30.21/24          # omita para DHCP
+    roles: [compose, node_exporter]
+  app:
+    vm_id: 1102
+    roles: [nginx, compose]
+    vars:
+      nginx_sites_enabled_configs: [blog.conf]
+```
+
+O `pvc up` valida o manifesto, planeja e aplica o Terraform, espera o SSH, gera o inventário do Ansible e roda um playbook em todos os hosts em paralelo. Rode de novo depois de qualquer alteração.
 
 Leia o [Guia de configuração](docs/setup-guide.pt-br.md) e o [Guia do Usuário](docs/user-guide.pt-br.md) antes de começar.
+
+### Comandos
+
+| Comando | O que faz |
+|---------|-----------|
+| `pvc init` | Cria `site.yml` e `secrets.yml`, instala as collections do Ansible, confere os pré-requisitos |
+| `pvc site apply` | Baixa as imagens cloud listadas em `site.yml` para todos os nós |
+| `pvc new <svc> [--hosts a,b]` | Cria o esqueleto de `services/<svc>/service.yml` |
+| `pvc validate [svc]` | Valida manifestos offline |
+| `pvc plan <svc>` | Valida e roda `terraform plan` |
+| `pvc up <svc>` | Aplica o Terraform e configura os hosts |
+| `pvc converge <svc> [--host h] [--tags t]` | Roda só a configuração novamente |
+| `pvc ssh <svc> <host>` | Entra por SSH com a chave do serviço |
+| `pvc status [svc]` | Hosts, endereços e nós |
+| `pvc down <svc>` | Destrói as VMs do serviço |
 
 ### Estrutura do projeto
 
 ```
-config/
-  defaults/
-    terraform/
-      infrastructure.env              # Defaults compartilhados Terraform + Proxmox (gitignored)
-      infrastructure.env.example      # Exemplo para infrastructure.env
-    local.env.example                 # Template para local.env
-    local.env                         # Arquivo de config do Ansible/senha do vault (gitignored)
-    ansible/
-      base.yml                        # Variaveis Ansible nao sensiveis
-      vault.yml.example               # Exemplo de arquivo de vault (criptografe isso)
-      vault.yml                       # Segredos criptografados do vault usados pelos playbooks
-    services/
-      service-template/
-        service-template.infrastructure.env.example  # Template para overrides por servico
-  services/
-    <servico>/
-      <servico>.infrastructure.env    # Especificacoes da VM e overrides por servico
-      terraform/                      # Root Terraform por servico (state + outputs)
-      filesystem/                     # Payload de arquivos do servico enviado para a VM
-      ansible/
-        <servico>.inventory.yml       # Inventario auto-gerado para essa VM
-
+pyproject.toml                  # projeto uv, entrada `pvc`
+pvc/                            # a CLI
+site.example.yml                # configurações do cluster (copie: site.yml, gitignored)
+secrets.example.yml             # segredos (copie: secrets.yml, criptografe, gitignored)
 terraform/
-  modules/
-    proxmox-vm/                       # Modulo compartilhado de VM (resources, variables, outputs)
-    proxmox-lxc/
-
+  site/                         # download das imagens cloud, um state para o cluster
+  service/                      # um root compartilhado por todos os serviços, for_each nos hosts
+  modules/proxmox-vm/           # VM + cloud-init já protegido
 ansible/
-  playbooks/                          # Seguranca, Docker, Nginx etc.
-  roles/                              # Roles Ansible reutilizaveis
-
-scripts/
-  service-commission.sh               # Terraform apply + info da VM (e qm migrate opcional)
-  service-migrate.sh                  # Terraform state + qm migrate da VM existente para outro no Proxmox
-  service-decommission.sh             # Terraform destroy
-  new-service-from-template.sh        # Cria `config/services/<servico>/` a partir de `config/defaults/services/service-template/`
-  inventories-regenerate-all.sh       # Gera inventario para todos os servicos
-  inventory-generate.sh               # Gera inventario para um servico
-  secure-vm.sh                        # Executa playbooks de seguranca em uma VM de servico
-  install-docker.sh                   # Instala Docker em uma VM de servico
-  install-nginx.sh                    # Instala Nginx em uma VM de servico
-  mount-nfs.sh                        # Configura montagens NFS em uma VM de servico
-  service-push.sh                     # Envia arquivos + deploy opcional do docker compose
-  lib/common.sh                       # Helpers compartilhados
+  site.yml                      # o único playbook; um play por grupo de role
+  roles/
+services/<svc>/
+  service.yml                   # o único arquivo que você edita
+  filetree/                     # arquivos para todos os hosts do serviço
+  hosts/<host>/filetree/        # arquivos para um host, sobrescreve o anterior
+  post-deploy.sh                # opcional
+  .pvc/                         # tfstate, tfvars e inventário gerado (gitignored)
 ```

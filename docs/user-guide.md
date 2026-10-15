@@ -1,254 +1,224 @@
 # User guide
 
-This file provides user instructions and documents workflows for reference.
-`chmod +x` script files if you want to avoid invoking bash.
+Run everything from the project root with `uv run pvc ...`, or activate the virtualenv (`source .venv/bin/activate`) and call `pvc` directly.
 
-## Services
+## Concepts
 
-Services are the main abstraction for Proxmox Commissioner.
-They are tied to a single VM.
-
-Here is their base structure:
+- **Site**: the cluster. `site.yml` holds the Proxmox endpoint, nodes, storage, network and defaults shared by everything.
+- **Service**: a group of VMs managed together, such as a database and the app that uses it. It lives in `services/<name>/` and is described by one file, `service.yml`. Each service has its own Terraform state and can be created and destroyed independently.
+- **Host**: one VM in a service.
+- **Role**: a feature a host opts into (`docker`, `nginx`, ...). Every host also gets `base`: hardening, packages and file push.
 
 ```
-  services/
-    <service>/
-      <service>.infrastructure.env    # Per-service VM specs & overrides
-      deploy.conf                     # Which playbooks this service runs, by phase
-      deploy-service.sh               # Deploy entrypoint for this service
-      terraform/                      # Per-service Terraform root (state + outputs)
-      filetree/                       # Service files payload deployed to the VM
-      ansible/
-        <service>.inventory.yml       # Auto-generated inventory for this VM
+services/<service>/
+  service.yml                  # the one file you edit
+  filetree/                    # files pushed to every host of the service
+  hosts/<host>/filetree/       # files pushed to one host, overriding filetree/
+  post-deploy.sh               # optional, runs on every host with --post-deploy
+  hosts/<host>/post-deploy.sh  # optional, replaces the service script for that host
+  .pvc/                        # generated: terraform state, tfvars, inventory (gitignored)
 ```
 
-Services will allow the scripts to run, maintain terraform state and configuration for each VM.
-While multi VM services are not supported, I have been using `service-role` pattern to group them.
+> `services/<service>/.pvc/terraform.tfstate` is the only record of what exists in Proxmox for that service. Back it up.
 
-Files in the `service/filetree` should replicate desired absolute paths and will be pushed to the VM.
-Content in `/home/*` dirs is handled different to maintain user permission. Other locations are copied with `root` ownership.
-
-### Setting up a service
-
-Services are generated from the template in `config/defaults/service/service-template`. Use the helper script:
+## Workflow
 
 ```bash
-bash scripts/new-service-from-template.sh your-service-name
+pvc new myservice --hosts db,app     # 1. scaffold services/myservice/service.yml
+$EDITOR services/myservice/service.yml   # 2. describe the hosts
+pvc validate myservice               # 3. optional: check it without touching Proxmox
+pvc up myservice                     # 4. create the VMs and configure them
+pvc converge myservice               # 5. re-run configuration any time
+pvc down myservice                   # 6. destroy the VMs
 ```
 
-This will add boilerplate filetree, `deploy.conf`, and deploy script, as well as `your-service-name.infrastructure.env` and required Terraform files.
+`pvc up` does, in order:
 
-Configure the infrastructure file with desired hardware configuration, list the playbooks you want in `deploy.conf`, then run the deploy script and your VM will be ready shortly.
+1. Validates `service.yml` against `site.yml` and the other services (duplicate `vm_id`, IP or VM name, unknown role, unknown node)
+2. Creates `~/.ssh/pvc/<service>` (ed25519) if it does not exist
+3. Runs `terraform apply`, which asks for approval (`-y` skips it)
+4. Waits until every host accepts SSH on the final port
+5. Writes `services/<service>/.pvc/inventory.yml` from the manifest and the Terraform output
+6. Runs `ansible/site.yml` against all hosts of the service in parallel
+
+Every VM boots already hardened by cloud-init: a `devops` sudo user with the service key, key-only SSH on `ssh.port`, root locked. There is no insecure bootstrap phase, so rerunning any command is always safe.
+
+## The manifest
+
+```yaml
+defaults:                  # applies to every host of this service
+  node: pve1
+  cores: 2
+  memory: 2048
+  vlan: 30
+
+hosts:
+  db:
+    vm_id: 1101            # required, unique across the cluster
+    ip: 172.20.30.21/24    # CIDR for a static address; omit or "dhcp" for DHCP
+    disk: 32
+    roles: [compose, node_exporter]
+    vars:                  # Ansible variables for this host
+      additional_packages: [postgresql-client]
+  app:
+    vm_id: 1102
+    node: pve2             # overrides defaults.node
+    roles: [nginx, compose]
+    vars:
+      nginx_sites_enabled_configs: [blog.conf]
+```
+
+Values are resolved in this order, last wins: `defaults` in `site.yml`, `defaults` in `service.yml`, the host itself. `roles` are added together across the layers and `vars` are merged key by key.
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `vm_id` | none | Required. 100 or higher |
+| `name` | `<service>-<host>` | VM name and hostname |
+| `node` | the only node in `site.yml` | Required when `site.yml` lists several |
+| `ip` | DHCP | IPv4 CIDR. A static address needs a gateway |
+| `gateway` | `network.gateway` | |
+| `cores`, `sockets` | 1, 1 | |
+| `memory` | 1024 | MB, at least 512 |
+| `disk` | 16 | GB, at least 8 |
+| `vlan` | 0 | 0 means untagged |
+| `bridge` | `network.bridge` | |
+| `image` | first image in `site.yml` | A key under `images` |
+| `roles` | none | See the table below |
+| `vars` | none | Host variables for Ansible |
+
+Unknown fields are errors, so a typo like `memroy` is caught before anything happens.
+
+### Roles
+
+| Role | Installs or configures | Variables |
+|------|------------------------|-----------|
+| `base` (always) | SSH drop-in and UFW, unattended upgrades, fail2ban, extra packages and services, file push | `additional_packages`, `additional_services` |
+| `nfs` | NFS client and mounts | `nfs_mountpoints` |
+| `docker` | Docker engine and compose plugin | `docker_users` |
+| `compose` | `docker compose up` for the stack in the filetree. Implies `docker` | `docker_deploy_compose_dir`, `docker_deploy_pull`, `docker_deploy_force_recreate` |
+| `nginx` | nginx, certbot, Cloudflare DNS-01 wildcard certificate, enabled sites | `nginx_sites_enabled_configs`, `webserver_cert_name`, `webserver_cert_email`, `webserver_cert_domain_wildcard`, secret `vault_cloudflare_api_token` |
+| `cloudflared` | Cloudflare Tunnel client | |
+| `node_exporter` | Prometheus Node Exporter | `node_exporter_listen_address`, `node_exporter_open_ufw`, `node_exporter_ufw_from` |
+| `kubernetes` | Kubernetes packages | |
+
+Shared variables such as the certificate settings belong in `ansible_vars` in `site.yml`; per-host ones go under `vars`.
+
+An NFS example, where a host mounts a share:
+
+```yaml
+hosts:
+  media:
+    vm_id: 1200
+    roles: [nfs, compose]
+    vars:
+      nfs_mountpoints:
+        - name: media
+          server: 172.20.30.5
+          export: /exports/media
+          mount_point: /mnt/media
+          options: [vers=4, proto=tcp, noatime]
+```
+
+Values can refer to other hosts of the service through `hostvars`, using the VM name as the host name:
+
+```yaml
+vars:
+  nfs_mountpoints:
+    - server: "{{ hostvars['blog-db'].ansible_host }}"
+      export: /exports/blog
+      mount_point: /mnt/blog
+```
+
+Static IPs make these addresses stable and known before the VMs exist.
+
+## Files
+
+Everything under `filetree/` is pushed to the VM at the same absolute path, after software is installed and before nginx and compose are configured:
+
+- `filetree/home/devops/...` is copied to `/home/devops/...`, owned by the sudo user
+- every other top-level directory, such as `filetree/etc/nginx/sites-available/blog.conf`, is copied to `/etc/nginx/sites-available/blog.conf`, owned by `root`
+
+`services/<service>/filetree/` goes to every host. `services/<service>/hosts/<host>/filetree/` goes to that host only and wins on conflicts. A db and app pair would typically look like:
+
+```
+services/blog/
+  hosts/db/filetree/home/devops/blog/docker-compose.yml     # postgres
+  hosts/app/filetree/home/devops/blog/docker-compose.yml    # the app
+  hosts/app/filetree/etc/nginx/sites-available/blog.conf
+```
+
+The `compose` role runs the stack in `/home/devops/<service>/docker-compose.yml` (override with `docker_deploy_compose_dir`).
+
+## Post-deploy scripts
+
+`post-deploy.sh` is imperative and may not be idempotent, so it only runs when asked:
 
 ```bash
-bash config/services/your-service-name/deploy-service.sh --commission
+pvc up myservice --post-deploy
+pvc converge myservice --post-deploy
 ```
 
-### Full workflow
+It runs on every host as root. A `hosts/<host>/post-deploy.sh` replaces the service-wide script for that host.
 
-Use `scripts/new-service-from-template.sh <service>` to create `config/services/<service>/` from `config/defaults/services/service-template/`, then customize the per-service env.
+## Running part of the configuration
 
 ```bash
-# 1. Create the service directory from the template
-bash scripts/new-service-from-template.sh myservice
-
-# 2. Edit the per-service infra env (VM specs + overrides)
-nano config/services/myservice/myservice.infrastructure.env
-
-# 3. Pick the playbooks this service should run
-nano config/services/myservice/deploy.conf
-
-# 4. Provision the VM and configure it end to end
-bash scripts/service-deploy.sh myservice --commission
-
-# 5. Re-run any time to reconverge (hardening is skipped automatically)
-bash scripts/service-deploy.sh myservice
-
-# 6. Delete the VM
-bash scripts/service-decommission.sh myservice
+pvc converge blog                         # everything, every host
+pvc converge blog --host app              # one host
+pvc converge blog --tags nginx            # one stage
+pvc converge blog --host app -t files -t compose
 ```
 
-### Deploying and redeploying
+| Tag | Stage |
+|-----|-------|
+| `base` | Everything in the base play. Also `ssh`, `autoupdates`, `fail2ban`, `packages`, `services` |
+| `nfs`, `docker`, `cloudflared`, `kubernetes` | The matching role |
+| `node_exporter` (or `monitoring`) | Node Exporter |
+| `nginx` | nginx install and nginx site configuration. Also `webserver` and `webserver-config` separately |
+| `files` | File push |
+| `compose` | Compose deploy |
+| `post_deploy` | Post-deploy script (needs `--post-deploy`) |
 
-`service-deploy.sh` is the normal way to run a service. It probes the VM over SSH first, so it knows whether initial hardening has already happened and never tries to re-run a stage that can no longer connect:
+`pvc converge` never touches Proxmox, so it is fast. Use `pvc up` when `service.yml` changed hardware, network or nodes.
 
-| What the probe finds | What runs |
-|----------------------|-----------|
-| `devops` reachable on the hardened SSH port | Converge playbooks only |
-| `devops` reachable on port 22 | Hardening is finished, then converge |
-| Port 22 open but no `devops` key yet | Full bootstrap, then converge |
-| Nothing answers | Nothing; it tells you the VM is unreachable |
+## Multiple nodes
 
-That means re-running the same command is safe, and there is no need to comment stages out by hand.
+Set `node` per host (or in `defaults`). Terraform creates each VM directly on its node, using the image downloaded there. Every node must be listed in `site.yml`.
 
-Playbook lists come from the service's `deploy.conf`:
+Changing a host's `node` and running `pvc up` live-migrates the VM instead of recreating it.
+
+## Configuration files
+
+| File | Purpose |
+|------|---------|
+| `site.yml` | Proxmox endpoint, nodes, storage, network, images, SSH port and user, default VM sizes, shared Ansible variables |
+| `secrets.yml` | Ansible-vault encrypted: `proxmox_api_token`, `vault_devops_password`, `vault_cloudflare_api_token` |
+| `services/<svc>/service.yml` | Hosts of a service |
+
+The sudo password is hashed (SHA-512 crypt) into cloud-init and is also Ansible's `become` password. The API token reaches Terraform as an environment variable, never in a file.
+
+## Inspecting and debugging
 
 ```bash
-# Run once on a fresh VM. Auto-skipped when the host is already hardened.
-BOOTSTRAP_PLAYBOOKS=(
-    00-initial.yml
-    10-base-security.yml
-)
-
-# Idempotent, run on every deploy.
-CONVERGE_PLAYBOOKS=(
-    25-file-push.yml
-    20-docker.yml
-    26-docker-deploy.yml
-)
-
-# Imperative or non-idempotent. Only runs with --post-deploy.
-POSTDEPLOY_PLAYBOOKS=(
-    27-post-deploy.yml
-)
+pvc status                  # every service's hosts, addresses and nodes
+pvc ssh blog app            # shell on a host
+pvc ssh blog app journalctl -u docker --no-pager -n 50
+pvc plan blog               # what Terraform would change
 ```
 
-Useful flags:
+`services/<svc>/.pvc/inventory.yml` is regenerated on every run and should not be edited. Put host variables under `vars` in `service.yml`.
+
+To run Ansible by hand against a service:
 
 ```bash
-# See what would run, without running it
-bash scripts/service-deploy.sh myservice --dry-run
-
-# Provision the VM and generate its inventory first
-bash scripts/service-deploy.sh myservice --commission
-
-# Also run post-deploy.sh on the VM
-bash scripts/service-deploy.sh myservice --post-deploy
-
-# Run one playbook and stop
-bash scripts/service-deploy.sh myservice --only 23-node-exporter.yml
-
-# Override the probe when you already know the state
-bash scripts/service-deploy.sh myservice --bootstrap
-bash scripts/service-deploy.sh myservice --converge
+cd ansible
+uv run ansible-playbook -i ../services/blog/.pvc/inventory.yml site.yml -e @../secrets.yml --ask-vault-pass --limit svc_blog_app --tags nginx
 ```
 
-Inventory regeneration is opt-in via `--refresh-inventory` (or implied by `--commission`), because `inventory-generate.sh` rewrites the file from scratch and drops hand-edited host vars such as `nfs_mountpoints`.
-
-If a playbook fails, the run stops and prints the exact command to resume from that point.
-
-## Configuration
-
-All configuration is managed through environment variables in `config/`.
-Configuration has layered load order, values from the last file substitute values from the first file.
-
-1. `local.env` - Ansible and other environment config
-2. `terraform/infrastructure.env` - Terraform/Proxmox defaults
-3. `config/services/<service>/<service>.infrastructure.env` - service overrides
-
-### Overview
-
-#### Defaults level
-
-- **`config/defaults/terraform/infrastructure.env`** 
-  - Shared Terraform + Proxmox authentication defaults 
-  - (gitignored; create from `config/defaults/terraform/infrastructure.env.example`)
-
-- **`config/defaults/local.env`** 
-  - Ansible and other additional environment configuration
-  - (gitignored; create from `config/defaults/local.env.example`)
-  
-#### Service level
-  
-- **`config/services/<service>/<service>.infrastructure.env`** 
-  - Per-service VM specs and terraform overrides
-  - **Change VM specs (vCPU, RAM, HDD) here!**
-  - (gitignored; generated from `config/defaults/services/service-template/`)
-
-## Utility scripts
-
-Utility scripts located in `scripts/` allow direct access to functionality and can be called from service deployment scripts. Every script takes a **service name** as its first argument.
-
-Current functionality:
-
-- Create a new service scaffold from template.
-```bash
-bash scripts/new-service-from-template.sh service-name
-```
-
-- Deploy a service, running only the phases it still needs.
-```bash
-bash scripts/service-deploy.sh service-name
-bash scripts/service-deploy.sh service-name --help
-```
-
-- Create a new VM for a service.
-```bash
-bash scripts/service-commission.sh service-name
-```
-
-- Decommission (destroy) a service VM.
-```bash
-bash scripts/service-decommission.sh service-name
-```
-
-- Migrate a VM to another Proxmox node.
-```bash
-bash scripts/service-migrate.sh service-name destination-node destination-node-ip
-```
-
-- Push the service `filetree` payload to the VM.
-```bash
-bash scripts/run-playbook.sh service-name 25-file-push.yml
-```
-
-- Deploy the service's Docker Compose stack.
-```bash
-bash scripts/run-playbook.sh service-name 26-docker-deploy.yml
-```
-
-- Generate or refresh a service inventory from Terraform outputs.
-```bash
-bash scripts/inventory-generate.sh service-name
-```
-
-- Regenerate inventories for all services (or a single service).
-```bash
-bash scripts/inventories-regenerate-all.sh
-```
-
-- Run a specific Ansible playbook against a service VM.
-```bash
-bash scripts/run-playbook.sh service-name 15-web-server.yml
-bash scripts/run-playbook.sh service-name 23-node-exporter.yml
-```
-
-## Default Configurations
-
-### Default Terraform configuration and VM specs
+## Destroying a service
 
 ```bash
-# 1. Copy shared Terraform/Proxmox defaults
-cp config/defaults/terraform/infrastructure.env.example config/defaults/terraform/infrastructure.env
-
-# 1. Edit Terraform/Proxmox defaults (tokens, passwords, clone/storage/network settings)
-nano config/defaults/terraform/infrastructure.env
+pvc down blog
 ```
 
-### Default Ansible configuration and secrets vault
-```bash
-# 1. Copy Ansible config template (local.env)
-cp config/defaults/local.env.example config/defaults/local.env
-```
-
-### Variable structure
-- `config/defaults/ansible/base.yml`: Common non-sensitive Ansible variables (including Node Exporter listen address and optional UFW scrape rules for `23-node-exporter.yml`)
-- `config/defaults/ansible/vault.yml`: Encrypted sensitive variables (used via Ansible vault)
-- `config/services/<service>/ansible/inventory/<service>.deployment.yml`: Per-service inventory auto-generated from Terraform outputs
-
-### Set up your Ansible vault
-
-```bash
-# 1. (If needed) Create vault.yml from the example and encrypt it
-cp config/defaults/ansible/vault.yml.example config/defaults/ansible/vault.yml
-ansible-vault encrypt config/defaults/ansible/vault.yml
-
-# 2. Edit vault (works for already-encrypted files too)
-ansible-vault edit config/defaults/ansible/vault.yml
-```
-
-## Cluster: targeting different Proxmox nodes
-
-The VM is cloned on the "source" Proxmox node (`TF_VAR_proxmox_node` / `TF_VAR_proxmox_node_ip` from `config/defaults/terraform/infrastructure.env`).
-
-To move the VM to another node after provisioning, set `TF_VAR_proxmox_destination_node` and `TF_VAR_proxmox_destination_node_ip` in the service's `*.infrastructure.env`.
+Removes the VMs and the generated inventory. `service.yml`, the filetree and the SSH key stay, so `pvc up blog` brings the service back.

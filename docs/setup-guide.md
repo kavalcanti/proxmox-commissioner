@@ -1,76 +1,98 @@
-
 # Before you begin
 
 ## Install dependencies
 
-Make sure to install Ansible and Terraform before starting.
+- [uv](https://docs.astral.sh/uv/) (manages Python and the `pvc` dependencies, including Ansible)
+- [Terraform](https://developer.hashicorp.com/terraform/install) 1.5 or newer
+- OpenSSH client and OpenSSL
+
+```bash
+git clone https://github.com/kavalcanti/proxmox-commissioner
+cd proxmox-commissioner
+uv sync
+uv run pvc init
+```
+
+`pvc init` creates `site.yml` and `secrets.yml` from the examples, installs the Ansible collections into `ansible/collections/`, and reports anything missing from your PATH.
 
 ## PVE configuration
 
-Please follow these required steps in your Proxmox Virtual Environment host before you use Proxmox Commissioner.
+There is no template VM to build. Terraform downloads a Debian cloud image to each node and imports it as the VM disk. Proxmox needs three things:
 
-## Create a cloud-init template
+### 1. Storage content types
 
-A convenience script is provided for this under `scripts/vm-templates/debian.sh`
-Either copy the file or its contents to your PVE host and run in. 
-This can also be achieved on the shell or with ssh:
-
-``` bash
-# Manually creating a template vm in PVE shell
-# Download the Debian cloud image
-cd /tmp
-wget https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2
-
-# Import it as a VM template (creates VM ID 9000)
-qm create 9000 --name debian-13-cloud --memory 1024 --cores 1 --net0 virtio,bridge=vmbr0
-qm importdisk 9000 debian-13-generic-amd64.qcow2 local-lvm
-qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
-qm set 9000 --ide2 local:cloudinit
-qm set 9000 --boot c --bootdisk scsi0
-qm set 9000 --agent enabled=1
-qm set 9000 --vga qxl 
-
-# Convert to template
-qm template 9000
-
-# Clean up
-rm debian-13-generic-amd64.qcow2
-```
-
-Note VM IDs must be unique both in a single node and across a cluster.
-Debian is the OS I genereally use for servers, but the ansible Ansible automation in this repo will probably work for any Debian base distros.
-
-Terraform can probably deal with other distros as long as templates and defaults are adjusted.
-
-## Proxmox credentials
-
-You will need to create a proxmox API key. 
-
-Get a simple (and accteptably unsafe) one from PVE WebUI:
-1. Datacenter
-2. Permissions -> API Tokens -> Add
-3. Select User: root@pam 
-   3.1. Add a Token ID (any string will do) 
-   3.2. Uncheck `Privilege Separation`
-
-This creats an insecure but workable key which is fine for homelabs but not fine for production. 
-I recommend creating a separate user for terraform and using a terraform dedicated role with minimal permissions. 
-Enabling QEMU Agent requires SSH login, so the user should be @PAM, not @PVE.
-
-For details on how to achieve more secure authentication, refer to [BPG documentation](https://registry.terraform.io/providers/bpg/proxmox/0.37.1/docs).
-
-## Known setup pitfalls
-
-Some fiddling might be needed to get cloud-init available in proxmox. Storage (local or local-lvm) might not be configured for snippet storage.
-
-Check if snippets storage is configured on the Proxmox host with
+Cloud images are stored as `iso` content and cloud-init snippets as `snippets` content. Check which storage has them:
 
 ```bash
-pvesm status --content snippets 
+pvesm status --content iso
+pvesm status --content snippets
 ```
 
-If no storage is configured, run
+If `local` is missing either, enable them:
 
 ```bash
 pvesm set local --content vztmpl,iso,backup,snippets
 ```
+
+Put the storage names in `site.yml` under `storage`. `images` needs `iso`, `snippets` needs `snippets`, and `disk` and `cloudinit` need `images` content (for example `local-lvm`).
+
+### 2. An API token
+
+Get a simple (and acceptably unsafe) one from the PVE web UI:
+
+1. Datacenter
+2. Permissions -> API Tokens -> Add
+3. User: `root@pam`
+   1. Add a Token ID (any string)
+   2. Uncheck `Privilege Separation`
+
+This is fine for a homelab and not for production. For anything shared, create a dedicated user with a minimal role instead. Enabling the QEMU guest agent needs SSH login, so the user should be `@pam`, not `@pve`. See the [BPG provider documentation](https://registry.terraform.io/providers/bpg/proxmox/latest/docs) for details.
+
+Put the token in `secrets.yml` as `proxmox_api_token`.
+
+### 3. SSH access to the nodes
+
+Terraform uploads cloud-init snippets and imports disks over SSH, so it needs key access as `proxmox.ssh_user` (default `root`) on every node listed in `site.yml`.
+
+Either have an `ssh-agent` running with the key loaded, or set `proxmox.ssh_key` in `site.yml` and `pvc` will load that key into a temporary agent for each run (asking for the passphrase if it has one).
+
+## Configure pvc
+
+### site.yml
+
+Edit the endpoint, nodes, storage, network and defaults. Every field is documented in `site.example.yml`.
+
+### secrets.yml
+
+```yaml
+proxmox_api_token: "root@pam!pvc=<secret>"
+vault_devops_password: "<sudo password for the devops user>"
+# vault_cloudflare_api_token: "<only for hosts with the nginx role>"
+```
+
+Then encrypt it:
+
+```bash
+uv run ansible-vault encrypt secrets.yml
+```
+
+`pvc` reads the vault password from the file named by `PVC_VAULT_PASSWORD_FILE`, or asks for it. Edit later with `uv run ansible-vault edit secrets.yml`.
+
+### Download the cloud image
+
+```bash
+uv run pvc site apply
+```
+
+This runs once, and again whenever you add an image to `site.yml`. Images have their own Terraform state, so destroying a service never removes one.
+
+Note VM IDs must be unique across the whole cluster. `pvc` checks this across all your services.
+
+Debian is the OS the Ansible roles are written for. Other Debian-based distros will probably work if you add them under `images` and point a host's `image` at them.
+
+## Known setup pitfalls
+
+- **`pvc up` fails importing the disk.** The image has not been downloaded to that node. Run `pvc site apply`, and make sure every node a service uses is listed under `nodes` in `site.yml`.
+- **Snippet upload fails.** The `snippets` storage does not have the `snippets` content type, or SSH to the node failed.
+- **`qcow2` on LVM.** LVM-thin cannot hold qcow2 disks. Keep `vm.disk_format: raw` (the default) unless the disk storage is file based.
+- **A DHCP host never reports an address.** The guest agent has not started. Check the VM console for cloud-init errors, or give the host a static `ip`.

@@ -1,0 +1,47 @@
+---
+# Cloud-init already writes this drop-in at first boot, so on a fresh VM every
+# task here is a no-op. Running it keeps drifted hosts and older VMs converged.
+- name: Install OpenSSH server and UFW
+  ansible.builtin.apt:
+    name:
+      - openssh-server
+      - ufw
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+
+- name: Manage the SSH hardening drop-in
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-pvc.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by proxmox-commissioner
+      Port {{ ssh_port }}
+      PasswordAuthentication {{ ssh_password_authentication }}
+      KbdInteractiveAuthentication no
+      PermitRootLogin {{ ssh_permit_root_login }}
+  notify: Restart SSH
+
+- name: Validate the sshd configuration before any restart
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+
+- name: Allow the SSH port in UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+
+- name: Enable UFW with default deny
+  community.general.ufw:
+    state: enabled
+    policy: "{{ ufw_default_policy }}"
+    direction: incoming
+
+- name: Allow outgoing traffic
+  community.general.ufw:
+    policy: allow
+    direction: outgoing

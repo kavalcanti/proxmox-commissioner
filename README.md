@@ -5,93 +5,87 @@
 
 ## What is Proxmox Commissioner?
 
-A Terraform and Ansible tool to streamline services running on Proxmox Virtual Environment virtual machines.
+A small CLI, `pvc`, that turns one YAML manifest into running services on Proxmox Virtual Environment. Terraform creates the VMs, Ansible configures them, and `pvc` wires the two together.
 
-It is aimed at homelabbers or small teams running PVE.
+It is aimed at homelabbers and small teams running PVE.
 
 ### What can it do?
 
-1. Create, configure and secure VMs
-2. Push and deploy entire docker stacks with NFS remote storage support
-3. Push configs and deploy nginx with cloudflare DNS-01 certificates
-4. Add or remove services maintaining configuration
-5. Conveniently migrate VMs across cluster nodes
+1. Create one or more VMs per service (a database and an app host, say) from a single file
+2. Boot every VM already hardened: key-only SSH on a custom port, root locked, firewall and fail2ban on
+3. Install Docker, nginx with Cloudflare DNS-01 certificates, NFS mounts, Node Exporter, cloudflared
+4. Push files and deploy Docker Compose stacks to the right host
+5. Move a host to another cluster node by changing one line
 
-It provisions Virtual Machines on a Proxmox cluster and runs security and service configuration through Ansible. Each **service** (e.g. media stack, database, web app) gets its own Terraform state, config  directory, and lifecycle -- so you can create, secure, and configure VMs independently per service.
+No template VM is needed. Cloud images are downloaded straight to each node.
 
-### How does it do it?
-
-Simply create a new service from template from the project root dir and run the deploy script!
+### How does it work?
 
 ```bash
-bash scripts/new-service-from-template.sh service-name
-bash configs/services/service-name/deploy-service.sh
+uv sync                          # install pvc
+uv run pvc init                  # creates site.yml and secrets.yml
+uv run pvc site apply            # downloads the cloud image to every node
+uv run pvc new blog --hosts db,app
+uv run pvc up blog               # create the VMs and configure them
 ```
 
-This will create a VM with the default configuration:
+A service is one file, `services/blog/service.yml`:
 
-- 1vCPU
-- 1GB ram
-- 16gb HDD
+```yaml
+defaults:
+  node: pve1
+  vlan: 30
+  memory: 2048
 
-From here a series of Ansible playbooks and roles can:
+hosts:
+  db:
+    vm_id: 1101
+    ip: 172.20.30.21/24          # omit for DHCP
+    roles: [compose, node_exporter]
+  app:
+    vm_id: 1102
+    roles: [nginx, compose]
+    vars:
+      nginx_sites_enabled_configs: [blog.conf]
+```
 
-- Add non-root user
-- Harden SSH config
-- Install Docker and docker compose
-- Install, configure and deploy nginx
-- Configure NFS shares
-- Copy configuration files
-- Deploy docker stacks
+`pvc up` validates the manifest, plans and applies Terraform, waits for SSH, generates the Ansible inventory and runs one playbook against all hosts in parallel. Run it again after any change.
 
-Make sure to read the [Setup guide](docs/setup-guide.md) and the [User Guide](docs/user-guide.md) before starting!
+Read the [Setup guide](docs/setup-guide.md) and the [User guide](docs/user-guide.md) before starting.
+
+### Commands
+
+| Command | What it does |
+|---------|--------------|
+| `pvc init` | Create `site.yml` and `secrets.yml`, install Ansible collections, check prerequisites |
+| `pvc site apply` | Download the cloud images listed in `site.yml` to every node |
+| `pvc new <svc> [--hosts a,b]` | Scaffold `services/<svc>/service.yml` |
+| `pvc validate [svc]` | Check manifests offline |
+| `pvc plan <svc>` | Validate, then `terraform plan` |
+| `pvc up <svc>` | Apply Terraform, then configure the hosts |
+| `pvc converge <svc> [--host h] [--tags t]` | Re-run configuration only |
+| `pvc ssh <svc> <host>` | SSH in with the service key |
+| `pvc status [svc]` | Hosts, addresses and nodes |
+| `pvc down <svc>` | Destroy the service's VMs |
 
 ### Project structure
 
 ```
-config/
-  defaults/
-    terraform/
-      infrastructure.env              # Shared Terraform + Proxmox defaults (gitignored)
-      infrastructure.env.example      # Example for infrastructure.env
-    local.env.example                 # Template for local.env
-    local.env                         # Ansible config/vault password file (gitignored)
-    ansible/
-      base.yml                        # Non-sensitive Ansible vars
-      vault.yml.example               # Example vault file (encrypt this)
-      vault.yml                       # Encrypted vault secrets used by playbooks
-    services/
-      service-template/
-        service-template.infrastructure.env.example  # Template for per-service overrides
-  services/
-    <service>/
-      <service>.infrastructure.env    # Per-service VM specs & overrides
-      terraform/                      # Per-service Terraform root (state + outputs)
-      filesystem/                     # Service files payload deployed to the VM
-      ansible/
-        <service>.inventory.yml       # Auto-generated inventory for this VM
-
+pyproject.toml                  # uv project, `pvc` entry point
+pvc/                            # the CLI
+site.example.yml                # cluster-wide settings (copy: site.yml, gitignored)
+secrets.example.yml             # secrets (copy: secrets.yml, encrypt it, gitignored)
 terraform/
-  modules/
-    proxmox-vm/                       # Shared VM module (resources, variables, outputs)
-    proxmox-lxc/
-
+  site/                         # cloud image downloads, one state for the whole cluster
+  service/                      # one root shared by every service, for_each over hosts
+  modules/proxmox-vm/           # VM + hardened cloud-init
 ansible/
-  playbooks/                          # Security, Docker, Nginx, etc.
-  roles/                              # Reusable Ansible roles
-
-scripts/
-  service-commission.sh               # Terraform apply + VM info (and optional qm migrate)
-  service-migrate.sh                  # Terraform state + qm migrate existing VM to another Proxmox node
-  service-decommission.sh             # Terraform destroy
-  new-service-from-template.sh        # Create `config/services/<service>/` from `config/defaults/services/service-template/`
-  inventories-regenerate-all.sh       # Generate inventory for all services
-  inventory-generate.sh               # Generate inventory for one service
-  secure-vm.sh                        # Run security playbooks on a service VM
-  install-docker.sh                   # Install Docker on a service VM
-  install-nginx.sh                    # Install Nginx on a service VM
-  mount-nfs.sh                        # Configure NFS mounts on a service VM
-  service-push.sh                     # Push files + (optional) docker compose deploy
-  lib/common.sh                       # Shared helpers
+  site.yml                      # the only playbook; one play per role group
+  roles/
+services/<svc>/
+  service.yml                   # the one file you edit
+  filetree/                     # files for every host of the service
+  hosts/<host>/filetree/        # files for one host, overrides the above
+  post-deploy.sh                # optional
+  .pvc/                         # tfstate, tfvars and generated inventory (gitignored)
 ```
-

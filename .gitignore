@@ -2,23 +2,31 @@
 .*/
 TODO.md
 
-# Secrets file
-**/vault.yml
-**/infrastructure.env
-**/*.infrastructure.env
-**/local.env
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Site config and secrets (examples are committed)
+/site.yml
+/secrets.yml
 **/.vaultpass
 
-# Terraform files
+# Per-service scratch: tfstate, TF_DATA_DIR, tfvars, generated inventory
+.pvc/
+services/*/.pvc/
+
+# Terraform
 **/terraform.tfstate
 **/terraform.tfstate.*
 **/.terraform/
-**/.terraform.lock.hcl
-# Machine-local symlink to commissioner checkout (see ensure_proxmox_vm_module_symlink)
-**/terraform/proxmox-vm-module
+# .terraform.lock.hcl is committed so provider versions are reproducible
 
-# Running services
-config/services/*/
+# Ansible collections installed by `pvc init`
+ansible/collections/
+
+# Running services: manifests live in your own repo or are copied in by hand
 services/*
 !services/nginx/
 !services/nginx/**

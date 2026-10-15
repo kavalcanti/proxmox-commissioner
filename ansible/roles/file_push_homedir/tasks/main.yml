@@ -1,0 +1,22 @@
+---
+# Copies <source>/home/ onto /home/ for every payload that exists. Sources are
+# applied in order, so a host payload overrides the service-wide one.
+- name: Check which home payloads exist
+  ansible.builtin.stat:
+    path: "{{ item }}/home"
+  delegate_to: localhost
+  become: false
+  loop: "{{ file_push_sources }}"
+  register: _homedir_stat
+
+- name: Copy home payloads to the remote host
+  ansible.builtin.copy:
+    src: "{{ item.item }}/home/"
+    dest: /home/
+    owner: "{{ file_push_homedir_remote_user }}"
+    group: "{{ file_push_homedir_remote_user }}"
+    mode: preserve
+  loop: "{{ _homedir_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}/home"
+  when: item.stat.exists and item.stat.isdir

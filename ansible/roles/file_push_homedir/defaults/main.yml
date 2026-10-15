@@ -1,0 +1,8 @@
+---
+file_push_homedir_remote_user: "{{ user_devops }}"
+
+# Payload roots on the controller, lowest precedence first.
+# Requires `service_dir` and `host_key` from the generated inventory.
+file_push_sources:
+  - "{{ service_dir }}/filetree"
+  - "{{ service_dir }}/hosts/{{ host_key }}/filetree"

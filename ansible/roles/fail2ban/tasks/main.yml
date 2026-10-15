@@ -1,0 +1,36 @@
+---
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - python3-systemd
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+
+# Debian cloud images ship without rsyslog, so there is no /var/log/auth.log.
+# Read the journal instead and watch the real SSH port.
+- name: Configure fail2ban
+  ansible.builtin.copy:
+    mode: "0644"
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = {{ fail2ban_bantime }}
+      findtime = {{ fail2ban_findtime }}
+      maxretry = {{ fail2ban_maxretry }}
+      backend = systemd
+
+      [sshd]
+      enabled = true
+      port = {{ ssh_port }}
+      filter = sshd
+      maxretry = {{ fail2ban_ssh_maxretry }}
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true

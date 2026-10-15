@@ -1,0 +1,27 @@
+---
+# Every top-level directory under a payload root except `home` is copied onto
+# the matching absolute path (filetree/etc/nginx -> /etc/nginx). Sources are
+# applied in order, so a host payload overrides the service-wide one.
+- name: Find top-level directories excluding home
+  ansible.builtin.find:
+    paths: "{{ item }}"
+    file_type: directory
+    recurse: false
+    excludes:
+      - "home"
+  delegate_to: localhost
+  become: false
+  loop: "{{ file_push_sources }}"
+  register: _sysconfig_dirs
+
+- name: Copy sysconfig directories to remote
+  ansible.builtin.copy:
+    src: "{{ item.path }}/"
+    dest: "/{{ item.path | basename }}/"
+    owner: "{{ file_push_sysconfig_owner }}"
+    group: "{{ file_push_sysconfig_group }}"
+    mode: preserve
+  become: true
+  loop: "{{ _sysconfig_dirs.results | map(attribute='files') | flatten }}"
+  loop_control:
+    label: "{{ item.path }}"
