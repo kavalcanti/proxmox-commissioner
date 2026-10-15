@@ -11,7 +11,7 @@ user_root: root
 user_devops_password: "{{ vault_devops_password }}"
 ansible_become_password: "{{ vault_devops_password }}"
 
-sys_hostname: beyondbett
+sys_hostname: mediastack
 
 # SSH key path for standalone runs
 ssh_key_dir: "~/.ssh/ansible_keys"

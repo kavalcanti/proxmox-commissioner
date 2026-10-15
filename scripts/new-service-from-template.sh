@@ -124,4 +124,5 @@ ln -sfn "${TERRAFORM_DIR}/modules/proxmox-vm" "${TARGET_DIR}/${terraform_leaf}/$
 # ------------------------------------------------------------------------------
 echo "Created service '${SERVICE}' at ${TARGET_DIR}/"
 echo "  - Edit ${TARGET_DIR}/${SERVICE}.infrastructure.env (VM id, IP, etc.)"
-echo "  - Then run steps in ${TARGET_DIR}/deploy-service.sh"
+echo "  - Edit ${TARGET_DIR}/deploy.conf to list this service's playbooks"
+echo "  - Then run ${TARGET_DIR}/deploy-service.sh --commission"

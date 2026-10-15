@@ -14,8 +14,10 @@ Aqui esta a estrutura base:
   services/
     <service>/
       <service>.infrastructure.env    # Especificacoes e sobrescritas de VM por servico
+      deploy.conf                     # Quais playbooks este servico executa, por fase
+      deploy-service.sh               # Entrypoint de deploy deste servico
       terraform/                      # Raiz Terraform por servico (state + outputs)
-      filesystem/                     # Payload de arquivos do servico implantado na VM
+      filetree/                       # Payload de arquivos do servico implantado na VM
       ansible/
         <service>.inventory.yml       # Inventario auto-gerado para esta VM
 ```
@@ -23,7 +25,7 @@ Aqui esta a estrutura base:
 Servicos permitem que os scripts executem, mantenham o estado do Terraform e a configuracao de cada VM.
 Embora servicos com varias VMs nao sejam suportados, tenho usado o padrao `service-role` para agrupa-los.
 
-Arquivos em `service/filesystem` devem replicar os caminhos absolutos desejados e serao enviados para a VM.
+Arquivos em `service/filetree` devem replicar os caminhos absolutos desejados e serao enviados para a VM.
 Conteudo em diretorios `/home/*` e tratado de forma diferente para manter permissao de usuario. Outros locais sao copiados com propriedade `root`.
 
 ### Configurando um servico
@@ -34,12 +36,12 @@ Servicos sao gerados a partir do template em `config/defaults/service/service-te
 bash scripts/new-service-from-template.sh your-service-name
 ```
 
-Isso adiciona a arvore de arquivos base e o script de deploy, alem de `your-service-name.infrastructure.env` e os arquivos Terraform obrigatorios.
+Isso adiciona a arvore de arquivos base, o `deploy.conf` e o script de deploy, alem de `your-service-name.infrastructure.env` e os arquivos Terraform obrigatorios.
 
-Configure o arquivo de infraestrutura com a configuracao de hardware desejada e execute o script de deploy; sua VM estara pronta em breve.
+Configure o arquivo de infraestrutura com a configuracao de hardware desejada, liste os playbooks desejados em `deploy.conf` e execute o script de deploy; sua VM estara pronta em breve.
 
 ```bash
-bash config/services/your-service-name/deploy-service.sh
+bash config/services/your-service-name/deploy-service.sh --commission
 ```
 
 ### Fluxo completo
@@ -53,18 +55,77 @@ bash scripts/new-service-from-template.sh myservice
 # 2. Edite o env de infraestrutura por servico (especificacoes da VM + sobrescritas)
 nano config/services/myservice/myservice.infrastructure.env
 
-# 3. Provisione a VM
-bash scripts/service-commission.sh myservice
+# 3. Escolha os playbooks que este servico deve executar
+nano config/services/myservice/deploy.conf
 
-# 4. Gere/atualize o inventario do Ansible
-bash scripts/inventory-generate.sh myservice
+# 4. Provisione a VM e configure-a de ponta a ponta
+bash scripts/service-deploy.sh myservice --commission
 
-# 5. Aplique seguranca na VM
-bash scripts/secure-vm.sh myservice
+# 5. Execute novamente quando quiser reconvergir (o hardening e pulado automaticamente)
+bash scripts/service-deploy.sh myservice
 
 # 6. Exclua a VM
-bash scripts/service-decomission.sh myservice
+bash scripts/service-decommission.sh myservice
 ```
+
+### Deploy e redeploy
+
+`service-deploy.sh` e a forma normal de executar um servico. Ele sonda a VM por SSH antes de qualquer coisa, entao sabe se o hardening inicial ja aconteceu e nunca tenta reexecutar uma etapa que nao consegue mais conectar:
+
+| O que a sondagem encontra | O que executa |
+|---------------------------|---------------|
+| `devops` acessivel na porta SSH endurecida | Apenas os playbooks de convergencia |
+| `devops` acessivel na porta 22 | Termina o hardening, depois converge |
+| Porta 22 aberta, mas sem chave `devops` | Bootstrap completo, depois converge |
+| Nada responde | Nada; avisa que a VM esta inacessivel |
+
+Isso significa que reexecutar o mesmo comando e seguro, e nao ha necessidade de comentar etapas manualmente.
+
+As listas de playbooks vem do `deploy.conf` do servico:
+
+```bash
+# Executa uma vez em uma VM nova. Pulado automaticamente quando a VM ja esta endurecida.
+BOOTSTRAP_PLAYBOOKS=(
+    00-initial.yml
+    10-base-security.yml
+)
+
+# Idempotente, executa em todo deploy.
+CONVERGE_PLAYBOOKS=(
+    25-file-push.yml
+    20-docker.yml
+    26-docker-deploy.yml
+)
+
+# Imperativo ou nao idempotente. Executa apenas com --post-deploy.
+POSTDEPLOY_PLAYBOOKS=(
+    27-post-deploy.yml
+)
+```
+
+Flags uteis:
+
+```bash
+# Veja o que seria executado, sem executar
+bash scripts/service-deploy.sh myservice --dry-run
+
+# Provisione a VM e gere o inventario primeiro
+bash scripts/service-deploy.sh myservice --commission
+
+# Execute tambem o post-deploy.sh na VM
+bash scripts/service-deploy.sh myservice --post-deploy
+
+# Execute um unico playbook e pare
+bash scripts/service-deploy.sh myservice --only 23-node-exporter.yml
+
+# Sobrescreva a sondagem quando voce ja sabe o estado
+bash scripts/service-deploy.sh myservice --bootstrap
+bash scripts/service-deploy.sh myservice --converge
+```
+
+A regeneracao do inventario e opcional, via `--refresh-inventory` (ou implicita em `--commission`), porque `inventory-generate.sh` reescreve o arquivo do zero e descarta variaveis de host editadas a mao, como `nfs_mountpoints`.
+
+Se um playbook falhar, a execucao para e imprime o comando exato para retomar daquele ponto.
 
 ## Configuracao
 
@@ -105,6 +166,12 @@ Scripts utilitarios em `scripts/` permitem acesso direto as funcionalidades e po
 bash scripts/new-service-from-template.sh service-name
 ```
 
+- Fazer deploy de um servico, executando apenas as fases que ainda faltam.
+```bash
+bash scripts/service-deploy.sh service-name
+bash scripts/service-deploy.sh service-name --help
+```
+
 - Criar uma nova VM para um servico.
 ```bash
 bash scripts/service-commission.sh service-name
@@ -120,14 +187,14 @@ bash scripts/service-decommission.sh service-name
 bash scripts/service-migrate.sh service-name destination-node destination-node-ip
 ```
 
-- Enviar arquivos do filesystem do servico para a VM.
+- Enviar o payload `filetree` do servico para a VM.
 ```bash
-bash scripts/service-push.sh service-name
+bash scripts/run-playbook.sh service-name 25-file-push.yml
 ```
 
-- Enviar arquivos do servico e fazer deploy da stack Docker Compose.
+- Fazer deploy da stack Docker Compose do servico.
 ```bash
-bash scripts/service-push.sh service-name true
+bash scripts/run-playbook.sh service-name 26-docker-deploy.yml
 ```
 
 - Gerar ou atualizar um inventario de servico a partir dos outputs do Terraform.

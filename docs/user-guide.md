@@ -14,8 +14,10 @@ Here is their base structure:
   services/
     <service>/
       <service>.infrastructure.env    # Per-service VM specs & overrides
+      deploy.conf                     # Which playbooks this service runs, by phase
+      deploy-service.sh               # Deploy entrypoint for this service
       terraform/                      # Per-service Terraform root (state + outputs)
-      filesystem/                     # Service files payload deployed to the VM
+      filetree/                       # Service files payload deployed to the VM
       ansible/
         <service>.inventory.yml       # Auto-generated inventory for this VM
 ```
@@ -23,7 +25,7 @@ Here is their base structure:
 Services will allow the scripts to run, maintain terraform state and configuration for each VM.
 While multi VM services are not supported, I have been using `service-role` pattern to group them.
 
-Files in the `service/filesystem` should replicate desired absolute paths and will be pushed to the VM.
+Files in the `service/filetree` should replicate desired absolute paths and will be pushed to the VM.
 Content in `/home/*` dirs is handled different to maintain user permission. Other locations are copied with `root` ownership.
 
 ### Setting up a service
@@ -34,12 +36,12 @@ Services are generated from the template in `config/defaults/service/service-tem
 bash scripts/new-service-from-template.sh your-service-name
 ```
 
-This will add boilerplate filetree and deploy script, as well as `your-service-name.infrastructure.env` and required Terraform files.
+This will add boilerplate filetree, `deploy.conf`, and deploy script, as well as `your-service-name.infrastructure.env` and required Terraform files.
 
-Configure the infrastructure file with desired hardware configuration and run the deploy script and your VM will be ready shortly.
+Configure the infrastructure file with desired hardware configuration, list the playbooks you want in `deploy.conf`, then run the deploy script and your VM will be ready shortly.
 
 ```bash
-bash config/services/your-service-name/deploy-service.sh
+bash config/services/your-service-name/deploy-service.sh --commission
 ```
 
 ### Full workflow
@@ -53,18 +55,77 @@ bash scripts/new-service-from-template.sh myservice
 # 2. Edit the per-service infra env (VM specs + overrides)
 nano config/services/myservice/myservice.infrastructure.env
 
-# 3. Provision the VM
-bash scripts/service-commission.sh myservice
+# 3. Pick the playbooks this service should run
+nano config/services/myservice/deploy.conf
 
-# 4. Generate/update the Ansible inventory
-bash scripts/inventory-generate.sh myservice
+# 4. Provision the VM and configure it end to end
+bash scripts/service-deploy.sh myservice --commission
 
-# 5. Secure the VM
-bash scripts/secure-vm.sh myservice
+# 5. Re-run any time to reconverge (hardening is skipped automatically)
+bash scripts/service-deploy.sh myservice
 
 # 6. Delete the VM
-bash scripts/service-decomission.sh myservice
+bash scripts/service-decommission.sh myservice
 ```
+
+### Deploying and redeploying
+
+`service-deploy.sh` is the normal way to run a service. It probes the VM over SSH first, so it knows whether initial hardening has already happened and never tries to re-run a stage that can no longer connect:
+
+| What the probe finds | What runs |
+|----------------------|-----------|
+| `devops` reachable on the hardened SSH port | Converge playbooks only |
+| `devops` reachable on port 22 | Hardening is finished, then converge |
+| Port 22 open but no `devops` key yet | Full bootstrap, then converge |
+| Nothing answers | Nothing; it tells you the VM is unreachable |
+
+That means re-running the same command is safe, and there is no need to comment stages out by hand.
+
+Playbook lists come from the service's `deploy.conf`:
+
+```bash
+# Run once on a fresh VM. Auto-skipped when the host is already hardened.
+BOOTSTRAP_PLAYBOOKS=(
+    00-initial.yml
+    10-base-security.yml
+)
+
+# Idempotent, run on every deploy.
+CONVERGE_PLAYBOOKS=(
+    25-file-push.yml
+    20-docker.yml
+    26-docker-deploy.yml
+)
+
+# Imperative or non-idempotent. Only runs with --post-deploy.
+POSTDEPLOY_PLAYBOOKS=(
+    27-post-deploy.yml
+)
+```
+
+Useful flags:
+
+```bash
+# See what would run, without running it
+bash scripts/service-deploy.sh myservice --dry-run
+
+# Provision the VM and generate its inventory first
+bash scripts/service-deploy.sh myservice --commission
+
+# Also run post-deploy.sh on the VM
+bash scripts/service-deploy.sh myservice --post-deploy
+
+# Run one playbook and stop
+bash scripts/service-deploy.sh myservice --only 23-node-exporter.yml
+
+# Override the probe when you already know the state
+bash scripts/service-deploy.sh myservice --bootstrap
+bash scripts/service-deploy.sh myservice --converge
+```
+
+Inventory regeneration is opt-in via `--refresh-inventory` (or implied by `--commission`), because `inventory-generate.sh` rewrites the file from scratch and drops hand-edited host vars such as `nfs_mountpoints`.
+
+If a playbook fails, the run stops and prints the exact command to resume from that point.
 
 ## Configuration
 
@@ -105,6 +166,12 @@ Current functionality:
 bash scripts/new-service-from-template.sh service-name
 ```
 
+- Deploy a service, running only the phases it still needs.
+```bash
+bash scripts/service-deploy.sh service-name
+bash scripts/service-deploy.sh service-name --help
+```
+
 - Create a new VM for a service.
 ```bash
 bash scripts/service-commission.sh service-name
@@ -120,14 +187,14 @@ bash scripts/service-decommission.sh service-name
 bash scripts/service-migrate.sh service-name destination-node destination-node-ip
 ```
 
-- Push service filesystem files to the VM.
+- Push the service `filetree` payload to the VM.
 ```bash
-bash scripts/service-push.sh service-name
+bash scripts/run-playbook.sh service-name 25-file-push.yml
 ```
 
-- Push service files and deploy Docker Compose stack.
+- Deploy the service's Docker Compose stack.
 ```bash
-bash scripts/service-push.sh service-name true
+bash scripts/run-playbook.sh service-name 26-docker-deploy.yml
 ```
 
 - Generate or refresh a service inventory from Terraform outputs.

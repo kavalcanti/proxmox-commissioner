@@ -10,3 +10,39 @@ all:
           ansible_user: "{{ user_devops }}"
           ansible_port: "{{ prod_ssh_port }}"
           # ansible_ssh_private_key_file: "{{ ssh_private_key }}"
+      vars:
+          service_name: "mediastack"
+          docker_users:
+              - "{{ user_devops }}"
+          nfs_mountpoints:
+              # List of NFS mounts to configure on the remote host(s)
+              - name: "stash"
+                server: "172.20.30.201"
+                # NFS export path (e.g. "/exports/media")
+                export: "media/stash/downloads"
+                # Local mount path on the target VM (e.g. "/mnt/media")
+                mount_point: "/home/devops/stash"
+                fstype: "nfs"
+                # Mount options (examples)
+                options:
+                  - "vers=4"
+                  - "proto=tcp"
+                  - "noatime"
+                # If you later add NFSv4 Kerberos or similar auth, wire it via Ansible vars/vault
+                # user: ""
+                # password: ""
+              - name: "arr-stack"
+                server: "172.20.30.201"
+                # NFS export path (e.g. "/exports/media")
+                export: "media/storage/mediaserver"
+                # Local mount path on the target VM (e.g. "/mnt/media")
+                mount_point: "/home/devops/arr-stack/data"
+                fstype: "nfs"
+                # Mount options (examples)
+                options:
+                  - "vers=4"
+                  - "proto=tcp"
+                  - "noatime"
+                # If you later add NFSv4 Kerberos or similar auth, wire it via Ansible vars/vault
+                # user: ""
+                # password: ""
