@@ -17,8 +17,6 @@ Ele é voltado para quem faz homelab e equipes pequenas que usam PVE.
 4. Envia arquivos e faz deploy de stacks Docker Compose no host certo
 5. Move um host para outro nó do cluster mudando uma linha
 
-Não é necessária uma VM template. As imagens cloud são baixadas direto para cada nó.
-
 ### Como ele funciona?
 
 ```bash

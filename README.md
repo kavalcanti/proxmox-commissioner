@@ -17,8 +17,6 @@ It is aimed at homelabbers and small teams running PVE.
 4. Push files and deploy Docker Compose stacks to the right host
 5. Move a host to another cluster node by changing one line
 
-No template VM is needed. Cloud images are downloaded straight to each node.
-
 ### How does it work?
 
 ```bash
