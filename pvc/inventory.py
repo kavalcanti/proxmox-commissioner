@@ -1,6 +1,6 @@
 """Ansible inventory, derived from the manifest and Terraform output on every run.
 
-Nothing here is meant to be edited by hand: host variables belong in service.yml.
+Reads host variables from service.yml.
 """
 
 from __future__ import annotations
