@@ -12,6 +12,7 @@ KNOWN_ROLES: tuple[str, ...] = (
     "cloudflared",
     "node_exporter",
     "kubernetes",
+    "gitlab",
     "compose",
 )
 
