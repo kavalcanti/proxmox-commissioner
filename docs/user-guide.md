@@ -100,6 +100,7 @@ Unknown fields are errors, so a typo like `memroy` is caught before anything hap
 | `cloudflared` | Cloudflare Tunnel client | |
 | `node_exporter` | Prometheus Node Exporter | `node_exporter_listen_address`, `node_exporter_open_ufw`, `node_exporter_ufw_from` |
 | `kubernetes` | Kubernetes packages | |
+| `gitlab` | GitLab Linux package on Debian (Community or Enterprise Edition), UFW for HTTP, HTTPS, and Git SSH | `gitlab_edition`, `gitlab_external_url`, `gitlab_root_email`, secret `vault_gitlab_root_password` |
 
 Shared variables such as the certificate settings belong in `ansible_vars` in `site.yml`; per-host ones go under `vars`.
 
@@ -172,7 +173,7 @@ pvc converge blog --host app -t files -t compose
 | Tag | Stage |
 |-----|-------|
 | `base` | Everything in the base play. Also `ssh`, `autoupdates`, `fail2ban`, `packages`, `services` |
-| `nfs`, `docker`, `cloudflared`, `kubernetes` | The matching role |
+| `nfs`, `docker`, `cloudflared`, `kubernetes`, `gitlab` | The matching role |
 | `node_exporter` (or `monitoring`) | Node Exporter |
 | `nginx` | nginx install and nginx site configuration. Also `webserver` and `webserver-config` separately |
 | `files` | File push |
