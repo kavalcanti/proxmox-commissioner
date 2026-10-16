@@ -1,0 +1,16 @@
+---
+# https://docs.gitlab.com/install/package/debian/
+# ce or ee. The edition is chosen with the package repository.
+gitlab_edition: ce
+
+# Applied on first install via EXTERNAL_URL, then kept in /etc/gitlab/gitlab.rb.
+# An https:// URL makes GitLab request a Let's Encrypt certificate.
+gitlab_external_url: ""
+
+# Optional. Used only on the first package install.
+gitlab_root_email: ""
+
+# Admin SSH stays on ssh_port. GitLab's own sshd listens on 22.
+gitlab_http_port: "80"
+gitlab_https_port: "443"
+gitlab_ssh_port: "22"

@@ -86,6 +86,14 @@
   roles:
     - role: kubernetes
 
+- name: GitLab
+  hosts: role_gitlab
+  become: true
+  gather_facts: true
+  tags: [gitlab]
+  roles:
+    - role: gitlab
+
 # Runs after the software above so /etc/nginx and friends already exist.
 - name: Push service files
   hosts: role_base

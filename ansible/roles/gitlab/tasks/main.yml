@@ -1,0 +1,102 @@
+---
+- name: Require a GitLab edition and external URL
+  ansible.builtin.assert:
+    that:
+      - gitlab_edition in ["ce", "ee"]
+      - gitlab_external_url is match("^https?://\\S+$")
+    fail_msg: >-
+      Set gitlab_edition to ce or ee and gitlab_external_url to an http:// or
+      https:// address. An https:// URL makes GitLab request a Let's Encrypt
+      certificate, which needs a public hostname and inbound HTTP.
+
+- name: Require an 8 character root password when one is set
+  ansible.builtin.assert:
+    that:
+      - vault_gitlab_root_password | length >= 8
+    fail_msg: vault_gitlab_root_password must be at least 8 characters.
+  when: vault_gitlab_root_password | default('') | length > 0
+
+- name: Install GitLab repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 300
+
+- name: Create directory for apt keyrings
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Download the GitLab repository signing key
+  ansible.builtin.get_url:
+    url: https://packages.gitlab.com/gpgkey/gpg.key
+    dest: /etc/apt/keyrings/gitlab-keyring.asc
+    mode: "0644"
+    force: true
+
+- name: Remove legacy GitLab apt list files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/gitlab_gitlab-ce.list
+    - /etc/apt/sources.list.d/gitlab_gitlab-ee.list
+
+- name: Add the GitLab package repository
+  ansible.builtin.deb822_repository:
+    name: gitlab
+    types: deb
+    uris: "https://packages.gitlab.com/gitlab/gitlab-{{ gitlab_edition }}/debian/{{ ansible_distribution_release }}"
+    suites: "{{ ansible_distribution_release }}"
+    components: main
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/gitlab-keyring.asc
+    state: present
+
+- name: Allow GitLab HTTP, HTTPS, and Git SSH
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - "{{ gitlab_http_port }}"
+    - "{{ gitlab_https_port }}"
+    - "{{ gitlab_ssh_port }}"
+
+- name: Install GitLab
+  ansible.builtin.apt:
+    name: "gitlab-{{ gitlab_edition }}"
+    state: present
+    update_cache: true
+    lock_timeout: 300
+  environment: "{{ gitlab_install_env }}"
+  vars:
+    gitlab_install_env: >-
+      {{
+        {'EXTERNAL_URL': gitlab_external_url}
+        | combine(
+            {'GITLAB_ROOT_EMAIL': gitlab_root_email}
+            if (gitlab_root_email | default('') | length) > 0
+            else {}
+          )
+        | combine(
+            {'GITLAB_ROOT_PASSWORD': vault_gitlab_root_password}
+            if (vault_gitlab_root_password | default('') | length) > 0
+            else {}
+          )
+      }}
+
+- name: Keep external_url in gitlab.rb
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    regexp: '^external_url\s+'
+    line: "external_url '{{ gitlab_external_url }}'"
+    insertbefore: BOF
+  notify: Reconfigure GitLab
