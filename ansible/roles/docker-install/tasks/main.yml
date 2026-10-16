@@ -6,6 +6,7 @@
       - ca-certificates
       - curl
       - gnupg
+      - python3-debian
     state: present
 
 # Add Docker's official GPG key and repository
@@ -22,14 +23,21 @@
     mode: '0644'
     force: true
 
+- name: Remove legacy Docker apt list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/docker.list
+    state: absent
+
 - name: Add Docker repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/{{ ansible_distribution | lower }}
-      {{ ansible_distribution_release }} stable
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/{{ ansible_distribution | lower }}
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/docker.asc
     state: present
-    filename: docker
 
 # Install Docker
 - name: Install Docker packages

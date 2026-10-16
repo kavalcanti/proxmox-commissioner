@@ -20,14 +20,25 @@
     mode: '0644'
     force: true
 
-- name: Add Kubernetes repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch=amd64 signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg]
-      https://pkgs.k8s.io/core:/stable:/v1.34/deb/
-      /
+- name: Install python3-debian (required by deb822_repository on the managed host)
+  ansible.builtin.apt:
+    name: python3-debian
     state: present
-    filename: kubernetes
+
+- name: Remove legacy Kubernetes apt list
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/kubernetes.list
+    state: absent
+
+- name: Add Kubernetes repository
+  ansible.builtin.deb822_repository:
+    name: kubernetes
+    types: deb
+    uris: https://pkgs.k8s.io/core:/stable:/v1.34/deb/
+    suites: /
+    architectures: amd64
+    signed_by: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+    state: present
 
 - name: Install Kubernetes
   ansible.builtin.apt:
