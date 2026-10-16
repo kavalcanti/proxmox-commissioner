@@ -17,11 +17,13 @@ uv run pvc init
 
 ## PVE configuration
 
-There is no template VM to build. Terraform downloads a Debian cloud image to each node and imports it as the VM disk. Proxmox needs three things:
+Terraform downloads a Debian cloud image to each node and imports it as the VM disk. 
+Before you start requirements:
 
 ### 1. Storage content types
 
-Cloud images are stored as `iso` content and cloud-init snippets as `snippets` content. Check which storage has them:
+Cloud images are stored as `iso` content and cloud-init snippets as `snippets` content. 
+To check which storage has them:
 
 ```bash
 pvesm status --content iso

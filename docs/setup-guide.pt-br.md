@@ -17,7 +17,8 @@ O `pvc init` cria `site.yml` e `secrets.yml` a partir dos exemplos, instala as c
 
 ## Configuração do PVE
 
-Não há VM template para montar. O Terraform baixa uma imagem cloud do Debian para cada nó e a importa como disco da VM. O Proxmox precisa de três coisas:
+O Terraform baixa uma imagem cloud do Debian para cada nó e a importa como disco da VM. 
+Requisitos antes de começar:
 
 ### 1. Tipos de conteúdo do storage
 
