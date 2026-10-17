@@ -68,7 +68,28 @@ hosts:
       nginx_sites_enabled_configs: [blog.conf]
 ```
 
-Os valores são resolvidos nesta ordem, o último vence: `defaults` do `site.yml`, `defaults` do `service.yml`, o próprio host. As `roles` são somadas entre as camadas e as `vars` são mescladas chave a chave.
+Os valores são resolvidos nesta ordem, o último vence: `network` do `site.yml`, `defaults` do `site.yml`, `network` do `service.yml`, `defaults` do `service.yml`, o próprio host. As `roles` são somadas entre as camadas e as `vars` são mescladas chave a chave.
+
+O bloco opcional `network:` no `service.yml` guarda configurações de rede do serviço inteiro (`bridge`, `model`, `gateway`, `nameservers`, `vlan`). Os mesmos campos, mais `ip` e `mac`, também podem ir em `defaults` ou em um host. É assim que um serviço usa outra bridge em um nó com várias NICs:
+
+```yaml
+network:                   # todos os hosts deste serviço
+  bridge: vmbr1
+  gateway: 172.20.40.1
+  nameservers: [172.20.40.1]
+  vlan: 40
+
+hosts:
+  app:
+    vm_id: 1102
+    ip: 172.20.40.21/24
+    mac: BC:24:11:A7:A1:C5   # MAC fixo opcional
+  db:
+    vm_id: 1101
+    bridge: vmbr2            # este host usa outra bridge
+    ip: 172.20.50.21/24
+    gateway: 172.20.50.1
+```
 
 | Campo | Padrão | Observações |
 |-------|--------|-------------|
@@ -77,11 +98,14 @@ Os valores são resolvidos nesta ordem, o último vence: `defaults` do `site.yml
 | `node` | o único nó do `site.yml` | Obrigatório se o `site.yml` listar vários |
 | `ip` | DHCP | CIDR IPv4. IP estático exige gateway |
 | `gateway` | `network.gateway` | |
+| `nameservers` | `network.nameservers` | Lista de endereços IP |
 | `cores`, `sockets` | 1, 1 | |
 | `memory` | 1024 | MB, no mínimo 512 |
 | `disk` | 16 | GB, no mínimo 8 |
 | `vlan` | 0 | 0 significa sem tag |
 | `bridge` | `network.bridge` | |
+| `model` | `network.model` | Modelo da NIC, ex.: `virtio` |
+| `mac` | gerado pelo Proxmox | `XX:XX:XX:XX:XX:XX`, único no cluster |
 | `image` | primeira imagem do `site.yml` | Uma chave de `images` |
 | `roles` | nenhuma | Veja a tabela abaixo |
 | `vars` | nenhuma | Variáveis de host para o Ansible |
