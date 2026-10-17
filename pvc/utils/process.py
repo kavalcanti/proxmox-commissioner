@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-from .errors import PvcError
+from ..errors import PvcError
 
 INSTALL_HINTS = {
     "terraform": "Install Terraform: https://developer.hashicorp.com/terraform/install",
