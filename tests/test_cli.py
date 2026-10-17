@@ -64,11 +64,12 @@ def test_status_for_a_service_that_was_never_deployed(project):
 
 def test_ssh_passes_extra_arguments_through_untouched(project, monkeypatch):
     import pvc.cli as cli
+    from pvc.ops import workflows
 
     write_service(project, "blog", BLOG_RAW)
     (project / "key").write_text("")
-    monkeypatch.setattr(cli, "service_hosts_output", lambda name: {"app": {"ip": "172.20.30.55"}})
-    monkeypatch.setattr(cli, "find_tool", lambda name: name)
+    monkeypatch.setattr(workflows, "service_hosts_output", lambda name: {"app": {"ip": "172.20.30.55"}})
+    monkeypatch.setattr(workflows, "find_tool", lambda name: name)
     captured = {}
     monkeypatch.setattr(cli.os, "execvp", lambda program, argv: captured.update(argv=argv))
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pvc.ansible import build_playbook_command
-from pvc.secrets import Secrets
+from pvc.providers.ansible import build_playbook_command
+from pvc.providers.secrets import Secrets
 
 INVENTORY = Path("/tmp/inventory.yml")
 

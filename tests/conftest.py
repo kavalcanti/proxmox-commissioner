@@ -6,7 +6,8 @@ import pytest
 import yaml
 
 from pvc import paths
-from pvc.site import SiteConfig, parse_site
+from pvc.manifest import parse_site
+from pvc.models import SiteConfig
 
 SITE_RAW = {
     "proxmox": {"endpoint": "https://pve1.lan:8006/"},

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from pvc.manifest import resolve_service
-from pvc.terraform import Workspace, build_service_tfvars, build_site_tfvars
+from pvc.providers.terraform import Workspace, build_service_tfvars, build_site_tfvars
 
 from .conftest import BLOG_RAW
 

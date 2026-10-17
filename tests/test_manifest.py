@@ -69,7 +69,7 @@ def test_implied_roles_are_added_and_base_is_dropped(site):
 
 
 def test_single_node_site_needs_no_node_in_the_manifest():
-    from pvc.site import parse_site
+    from pvc.manifest import parse_site
 
     one_node = parse_site({"proxmox": {"endpoint": "https://x:8006/"}, "nodes": {"only": {"address": "10.0.0.1"}}})
     service = resolve_service(one_node, "blog", {"hosts": {"app": {"vm_id": 1200}}})
@@ -87,7 +87,7 @@ def test_vm_name_defaults_to_service_dash_host_and_can_be_overridden(site):
 
 
 def test_network_precedence_is_site_service_network_service_defaults_host():
-    from pvc.site import parse_site
+    from pvc.manifest import parse_site
 
     site = parse_site(
         {
@@ -183,7 +183,7 @@ def test_static_ip_must_be_cidr_and_needs_a_gateway(site):
     raw["hosts"]["db"]["ip"] = "172.20.30.21"
     assert "IPv4 CIDR" in problems(site, raw)
 
-    from pvc.site import parse_site
+    from pvc.manifest import parse_site
 
     no_gateway = parse_site(
         {"proxmox": {"endpoint": "https://x:8006/"}, "nodes": {"pve1": {"address": "10.0.0.1"}}}

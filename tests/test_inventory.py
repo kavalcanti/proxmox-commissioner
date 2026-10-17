@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from pvc.errors import PvcError
-from pvc.inventory import build_inventory, group_name, write_inventory
+from pvc.providers.inventory import build_inventory, group_name, write_inventory
 from pvc.manifest import resolve_service
 from pvc.roles import KNOWN_ROLES
 

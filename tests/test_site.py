@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from pvc.errors import ConfigError
-from pvc.site import parse_site
+from pvc.manifest import parse_site
 
 
 def test_minimal_site_gets_sensible_defaults():

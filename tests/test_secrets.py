@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 from pvc.errors import PvcError
-from pvc.secrets import hash_password, load_secrets
+from pvc.providers.secrets import load_secrets
+from pvc.utils import hash_password
 
 PLAIN = "proxmox_api_token: root@pam!pvc=abc\nvault_devops_password: hunter2\n"
 
@@ -52,7 +53,7 @@ def test_missing_file_points_at_init(tmp_path):
 
 
 def test_encrypted_file_is_read_through_ansible_vault(tmp_path, monkeypatch):
-    from pvc.tools import find_tool, run
+    from pvc.utils import find_tool, run
 
     path = tmp_path / "secrets.yml"
     path.write_text(PLAIN)
