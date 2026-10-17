@@ -70,7 +70,8 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   network_device {
     bridge  = var.network_bridge
-    model   = var.network_model
+    model       = var.network_model
+    mac_address = var.network_mac
     vlan_id = var.network_vlan_id > 0 ? var.network_vlan_id : null
   }
 

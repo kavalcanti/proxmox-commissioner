@@ -9,15 +9,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from . import paths
 from .errors import ConfigError, PvcError, format_validation_error
 from .roles import KNOWN_ROLES, BASE_ROLE, expand_roles
-from .site import HostDefaults, SiteConfig, StrictModel
+from .site import HostDefaults, NetworkOverrides, SiteConfig, StrictModel
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
 HOSTNAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+MAC_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 MIN_VM_ID = 100
 
 
@@ -27,13 +28,13 @@ class HostSpec(HostDefaults):
     model_config = ConfigDict(extra="forbid")
 
     vm_id: int
-    # `dhcp`, omitted, or a CIDR such as 172.20.30.21/24.
-    ip: str | None = None
     # Override the VM name / hostname. Defaults to <service>-<host>.
     name: str | None = None
 
 
 class ServiceFile(StrictModel):
+    # Service-wide network settings. Override site.yml `network` and `defaults`.
+    network: NetworkOverrides = Field(default_factory=NetworkOverrides)
     defaults: HostDefaults = Field(default_factory=HostDefaults)
     hosts: dict[str, HostSpec] = Field(min_length=1)
 
@@ -52,6 +53,9 @@ class ResolvedHost:
     disk: int
     vlan: int
     bridge: str
+    model: str
+    nameservers: tuple[str, ...]
+    mac: str | None
     image: str
     roles: tuple[str, ...]
     vars: dict[str, Any] = field(default_factory=dict)
@@ -86,7 +90,7 @@ def _merge_layers(layers: list[dict[str, Any]]) -> dict[str, Any]:
     return merged
 
 
-def _set_fields(model: HostDefaults) -> dict[str, Any]:
+def _set_fields(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(exclude_unset=True, exclude_none=True)
 
 
@@ -110,8 +114,13 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
         )
 
     service_file = parse_service_file(raw, source)
-    site_layer = _set_fields(site.defaults)
-    service_layer = _set_fields(service_file.defaults)
+    # Least to most specific; later layers win.
+    shared_layers = [
+        site.network.model_dump(exclude_none=True),
+        _set_fields(site.defaults),
+        _set_fields(service_file.network),
+        _set_fields(service_file.defaults),
+    ]
 
     hosts: dict[str, ResolvedHost] = {}
     for key, spec in service_file.hosts.items():
@@ -119,7 +128,7 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
         if not NAME_PATTERN.match(key):
             problems.append(f"{where}: host key must be lowercase letters, digits and '-'")
 
-        merged = _merge_layers([site_layer, service_layer, _set_fields(spec)])
+        merged = _merge_layers([*shared_layers, _set_fields(spec)])
 
         vm_name = spec.name or f"{name}-{key}"
         if not HOSTNAME_PATTERN.match(vm_name):
@@ -143,25 +152,42 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
                 f"{where}: unknown role(s) {', '.join(repr(r) for r in unknown)} (known: {', '.join(KNOWN_ROLES)})"
             )
 
-        ip = spec.ip
-        if ip is not None and ip.lower() == "dhcp":
-            ip = None
-        gateway = merged.get("gateway") or site.network.gateway
+        raw_ip = merged.get("ip")
+        ip = None if raw_ip is not None and raw_ip.lower() == "dhcp" else raw_ip
+        gateway = merged.get("gateway")
         if ip is not None:
             try:
                 interface = ipaddress.ip_interface(ip)
                 if interface.version != 4 or "/" not in ip:
                     raise ValueError
             except ValueError:
-                problems.append(f"{where}: ip '{spec.ip}' must be 'dhcp' or an IPv4 CIDR like 172.20.30.21/24")
+                problems.append(f"{where}: ip '{raw_ip}' must be 'dhcp' or an IPv4 CIDR like 172.20.30.21/24")
             else:
                 if not gateway:
-                    problems.append(f"{where}: static ip needs a gateway (set network.gateway in site.yml or gateway)")
+                    problems.append(
+                        f"{where}: static ip needs a gateway (set network.gateway in site.yml or service.yml, or gateway)"
+                    )
         if gateway:
             try:
                 ipaddress.IPv4Address(gateway)
             except ValueError:
                 problems.append(f"{where}: gateway '{gateway}' is not an IPv4 address")
+
+        nameservers = tuple(merged.get("nameservers") or ())
+        for nameserver in nameservers:
+            try:
+                ipaddress.ip_address(nameserver)
+            except ValueError:
+                problems.append(f"{where}: nameserver '{nameserver}' is not an IP address")
+
+        mac = merged.get("mac")
+        if mac is not None:
+            if not MAC_PATTERN.match(mac):
+                problems.append(f"{where}: mac '{mac}' must look like BC:24:11:A7:A1:C5")
+            elif int(mac[:2], 16) & 1:
+                problems.append(f"{where}: mac '{mac}' is a multicast address; the first byte must be even")
+            else:
+                mac = mac.upper()
 
         if spec.vm_id < MIN_VM_ID:
             problems.append(f"{where}: vm_id must be {MIN_VM_ID} or higher")
@@ -179,6 +205,9 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
             disk=merged.get("disk", 16),
             vlan=merged.get("vlan", 0),
             bridge=merged.get("bridge") or site.network.bridge,
+            model=merged.get("model") or site.network.model,
+            nameservers=nameservers,
+            mac=mac,
             image=image,
             roles=tuple(expand_roles([r for r in roles if r in KNOWN_ROLES or r == BASE_ROLE])),
             vars=merged["vars"],
@@ -187,6 +216,7 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
     problems.extend(_duplicates(hosts.values(), "vm_id", lambda h: h.vm_id))
     problems.extend(_duplicates(hosts.values(), "VM name", lambda h: h.name))
     problems.extend(_duplicates([h for h in hosts.values() if h.address], "ip", lambda h: h.address))
+    problems.extend(_duplicates([h for h in hosts.values() if h.mac], "mac", lambda h: h.mac))
 
     if problems:
         raise ConfigError(source, problems)
@@ -221,6 +251,11 @@ def conflicts_between(service: ResolvedService, others: list[ResolvedService]) -
                 if mine.name == theirs.name:
                     problems.append(
                         f"hosts.{mine.key}: VM name '{mine.name}' is already used by service '{other.name}'"
+                    )
+                if mine.mac and mine.mac == theirs.mac:
+                    problems.append(
+                        f"hosts.{mine.key}: mac {mine.mac} is already used by service "
+                        f"'{other.name}' (host '{theirs.key}')"
                     )
                 if mine.address and mine.address == theirs.address:
                     problems.append(

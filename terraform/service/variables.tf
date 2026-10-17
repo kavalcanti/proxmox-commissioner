@@ -44,6 +44,9 @@ variable "hosts" {
     disk          = number
     vlan          = number
     bridge        = string
+    model         = string
+    nameservers   = list(string)
+    mac           = string
     image_file_id = string
     roles         = list(string)
   }))
@@ -55,16 +58,6 @@ variable "storage" {
     snippets  = string
     cloudinit = string
   })
-}
-
-variable "network_model" {
-  type    = string
-  default = "virtio"
-}
-
-variable "nameservers" {
-  type    = list(string)
-  default = []
 }
 
 variable "vm_options" {

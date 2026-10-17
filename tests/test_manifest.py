@@ -86,6 +86,57 @@ def test_vm_name_defaults_to_service_dash_host_and_can_be_overridden(site):
     assert service.hosts["app"].name == "blog"
 
 
+def test_network_precedence_is_site_service_network_service_defaults_host():
+    from pvc.site import parse_site
+
+    site = parse_site(
+        {
+            "proxmox": {"endpoint": "https://x:8006/"},
+            "nodes": {"pve1": {"address": "10.0.0.1"}},
+            "network": {"bridge": "vmbr0", "model": "virtio", "gateway": "10.0.0.1", "nameservers": ["10.0.0.1"]},
+            "defaults": {"vlan": 10},
+        }
+    )
+    raw = {
+        "network": {"bridge": "vmbr1", "gateway": "172.20.30.1", "vlan": 30, "nameservers": ["172.20.30.2"]},
+        "defaults": {"model": "e1000", "vlan": 40},
+        "hosts": {
+            "plain": {"vm_id": 1200},
+            "custom": {
+                "vm_id": 1201,
+                "bridge": "vmbr2",
+                "vlan": 0,
+                "gateway": "172.20.40.1",
+                "nameservers": [],
+                "ip": "172.20.40.5/24",
+            },
+        },
+    }
+
+    hosts = resolve_service(site, "blog", raw).hosts
+
+    plain = hosts["plain"]
+    assert (plain.bridge, plain.model, plain.vlan) == ("vmbr1", "e1000", 40)  # service defaults beat service network
+    assert plain.nameservers == ("172.20.30.2",)
+    custom = hosts["custom"]
+    assert (custom.bridge, custom.vlan, custom.nameservers, custom.gateway) == ("vmbr2", 0, (), "172.20.40.1")
+
+
+def test_site_network_applies_when_the_service_sets_nothing(site):
+    host = resolve(site, BLOG_RAW).hosts["db"]
+
+    assert (host.bridge, host.model, host.nameservers, host.mac) == ("vmbr0", "virtio", (), None)
+
+
+def test_service_defaults_can_carry_ip_and_mac(site):
+    raw = {"defaults": {"node": "pve1", "ip": "172.20.30.10/32", "mac": "bc:24:11:a7:a1:c5"}, "hosts": {"a": {"vm_id": 1300}}}
+
+    host = resolve(site, raw).hosts["a"]
+
+    assert host.ip == "172.20.30.10/32" and host.gateway == "172.20.30.1"
+    assert host.mac == "BC:24:11:A7:A1:C5"
+
+
 def test_dhcp_and_static_addresses(site):
     service = resolve(site, BLOG_RAW)
     assert service.hosts["db"].ip == "172.20.30.21/24"
@@ -143,6 +194,32 @@ def test_static_ip_must_be_cidr_and_needs_a_gateway(site):
     assert "needs a gateway" in str(error.value)
 
 
+def test_mac_and_nameserver_values_are_checked(site):
+    raw = copy.deepcopy(BLOG_RAW)
+    raw["hosts"]["db"]["mac"] = "not-a-mac"
+    raw["hosts"]["app"]["mac"] = "01:00:5E:00:00:01"
+    raw["network"] = {"nameservers": ["dns.lan"], "gateway": "gw"}
+    text = problems(site, raw)
+
+    assert "mac 'not-a-mac'" in text and "multicast" in text
+    assert "nameserver 'dns.lan'" in text and "gateway 'gw'" in text
+
+
+def test_duplicate_mac_within_a_service_is_caught(site):
+    raw = copy.deepcopy(BLOG_RAW)
+    raw["hosts"]["db"]["mac"] = "BC:24:11:00:00:01"
+    raw["hosts"]["app"]["mac"] = "bc:24:11:00:00:01"
+
+    assert "share the same mac" in problems(site, raw)
+
+
+def test_unknown_network_key_is_rejected(site):
+    raw = copy.deepcopy(BLOG_RAW)
+    raw["network"] = {"brigde": "vmbr1"}
+
+    assert "brigde" in problems(site, raw)
+
+
 def test_multiple_nodes_require_an_explicit_node(site):
     raw = {"hosts": {"app": {"vm_id": 1200}}}
     assert "no node set" in problems(site, raw)
@@ -183,6 +260,17 @@ def test_vm_id_and_ip_clashes_between_services_are_caught(site, project):
 
     text = str(error.value)
     assert "vm_id 1101" in text and "172.20.30.21" in text and "'other'" in text
+
+
+def test_mac_clash_between_services_is_caught(site, project):
+    write_service(project, "other", {"hosts": {"x": {"vm_id": 1500, "node": "pve1", "mac": "BC:24:11:00:00:09"}}})
+    raw = {"hosts": {"y": {"vm_id": 1501, "node": "pve1", "mac": "bc:24:11:00:00:09"}}}
+    write_service(project, "blog", raw)
+
+    with pytest.raises(ConfigError) as error:
+        load_service(site, "blog")
+
+    assert "mac BC:24:11:00:00:09" in str(error.value) and "'other'" in str(error.value)
 
 
 def test_broken_sibling_does_not_block_a_good_service(site, project):

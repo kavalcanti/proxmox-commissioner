@@ -52,6 +52,9 @@ def build_service_tfvars(site: SiteConfig, service: ResolvedService, ssh_public_
             "disk": host.disk,
             "vlan": host.vlan,
             "bridge": host.bridge,
+            "model": host.model,
+            "nameservers": list(host.nameservers),
+            "mac": host.mac or "",
             "image_file_id": site.image_file_id(host.image),
             "roles": list(host.roles),
         }
@@ -66,8 +69,6 @@ def build_service_tfvars(site: SiteConfig, service: ResolvedService, ssh_public_
             "snippets": site.storage.snippets,
             "cloudinit": site.storage.cloudinit,
         },
-        "network_model": site.network.model,
-        "nameservers": site.network.nameservers,
         "vm_options": {
             "qemu_agent": site.vm.qemu_agent,
             "package_update": site.vm.package_update,

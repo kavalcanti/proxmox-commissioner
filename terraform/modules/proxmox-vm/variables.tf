@@ -115,6 +115,12 @@ variable "network_model" {
   default = "virtio"
 }
 
+variable "network_mac" {
+  description = "Fixed MAC address. Null lets Proxmox generate one."
+  type        = string
+  default     = null
+}
+
 variable "network_vlan_id" {
   description = "VLAN tag (0 = untagged)"
   type        = number

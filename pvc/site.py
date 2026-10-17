@@ -48,6 +48,16 @@ class Network(StrictModel):
     nameservers: list[str] = Field(default_factory=list)
 
 
+class NetworkOverrides(StrictModel):
+    """`network:` block of a service.yml. Anything left unset falls back to site.yml."""
+
+    bridge: str | None = None
+    model: str | None = None
+    gateway: str | None = None
+    nameservers: list[str] | None = None
+    vlan: int | None = Field(default=None, ge=0, le=4094)
+
+
 class Image(StrictModel):
     url: str
 
@@ -82,7 +92,13 @@ class HostDefaults(StrictModel):
     disk: int | None = Field(default=None, ge=8)
     vlan: int | None = Field(default=None, ge=0, le=4094)
     bridge: str | None = None
+    model: str | None = None
     gateway: str | None = None
+    nameservers: list[str] | None = None
+    # `dhcp`, omitted, or a CIDR such as 172.20.30.21/24.
+    ip: str | None = None
+    # Fixed MAC address, e.g. BC:24:11:A7:A1:C5. Proxmox generates one when unset.
+    mac: str | None = None
     image: str | None = None
     roles: list[str] = Field(default_factory=list)
     vars: dict[str, Any] = Field(default_factory=dict)

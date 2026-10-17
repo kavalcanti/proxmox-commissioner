@@ -21,11 +21,12 @@ module "vm" {
   disk_format         = var.vm_options.disk_format
 
   network_bridge  = each.value.bridge
-  network_model   = var.network_model
+  network_model   = each.value.model
+  network_mac     = each.value.mac == "" ? null : each.value.mac
   network_vlan_id = each.value.vlan
   network_ip      = each.value.ip
   network_gateway = each.value.gateway == "" ? null : each.value.gateway
-  nameservers     = var.nameservers
+  nameservers     = each.value.nameservers
 
   enable_qemu_agent = var.vm_options.qemu_agent
   package_update    = var.vm_options.package_update
