@@ -10,11 +10,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-from . import paths
-from .errors import PvcError
-from .manifest import ResolvedService
-from .site import SiteConfig
-from .tools import find_tool, run
+from .. import paths
+from ..errors import PvcError
+from ..models import ResolvedService, SiteConfig
+from ..utils import find_tool, run
 
 
 # ------------------------------------------------------------------------------

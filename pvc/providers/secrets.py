@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import atexit
 import getpass
-import hashlib
 import os
 import stat
 import subprocess
@@ -12,11 +11,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from . import paths
-from .errors import PvcError
-from .tools import find_tool
+from .. import paths
+from ..errors import PvcError
+from ..utils import find_tool, hash_password, parse_yaml_mapping
 
 REQUIRED_KEYS = ("proxmox_api_token", "vault_devops_password")
 VAULT_HEADER = "$ANSIBLE_VAULT"
@@ -57,25 +54,6 @@ class Secrets:
         return args
 
 
-def hash_password(password: str, seed: str) -> str:
-    """SHA-512 crypt hash with a salt derived from `seed`.
-
-    A fixed salt per service keeps the hash stable between runs, so Terraform does not
-    see a changed cloud-init file (and touch the VM) every time pvc runs.
-    """
-    openssl = find_tool("openssl")
-    salt = hashlib.sha256(f"pvc:{seed}".encode()).hexdigest()[:16]
-    result = subprocess.run(
-        [openssl, "passwd", "-6", "-salt", salt, "-stdin"],
-        input=password,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise PvcError(f"openssl could not hash the devops password: {result.stderr.strip()}")
-    return result.stdout.strip()
-
-
 def _is_encrypted(path: Path) -> bool:
     with path.open() as handle:
         return handle.readline().startswith(VAULT_HEADER)
@@ -104,7 +82,7 @@ def load_secrets(path: Path | None = None) -> Secrets:
         raise PvcError(f"{path} not found. Run `pvc init`, then fill it in and encrypt it.")
 
     if not _is_encrypted(path):
-        return Secrets(path, _parse(path.read_text(), path), password_file=None)
+        return Secrets(path, parse_yaml_mapping(path.read_text(), path), password_file=None)
 
     password_file = _vault_password_file()
     result = subprocess.run(
@@ -114,14 +92,4 @@ def load_secrets(path: Path | None = None) -> Secrets:
     )
     if result.returncode != 0:
         raise PvcError(f"Could not decrypt {path}: {result.stderr.strip() or 'wrong vault password?'}")
-    return Secrets(path, _parse(result.stdout, path), password_file=password_file)
-
-
-def _parse(text: str, path: Path) -> dict[str, Any]:
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as error:
-        raise PvcError(f"{path} is not valid YAML: {error}") from error
-    if not isinstance(data, dict):
-        raise PvcError(f"{path} must be a YAML mapping.")
-    return data
+    return Secrets(path, parse_yaml_mapping(result.stdout, path), password_file=password_file)
