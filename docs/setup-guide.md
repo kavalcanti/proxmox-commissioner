@@ -100,7 +100,18 @@ Only needed for hosts that use `pci_devices` (see the [user guide](user-guide.md
 2. Add kernel parameters. For Intel, in `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt"`) then `update-grub`, or in `/etc/kernel/cmdline` followed by `proxmox-boot-tool refresh` on systemd-boot installs. AMD enables the IOMMU by default, `iommu=pt` is enough.
 3. Load the VFIO modules by adding `vfio`, `vfio_iommu_type1` and `vfio_pci` to `/etc/modules`, then reboot.
 4. Check it worked with `dmesg | grep -e DMAR -e IOMMU`.
-5. Find the device values for `site.yml` with `lspci -Dnn` (the address, such as `0000:00:02.0`, and the `[8086:4680]` ids), and the group with `find /sys/kernel/iommu_groups/ -type l | grep 0000:00:02.0`.
+5. Read the device values for `site.yml` on the node. `path` and `id` come from `lspci -Dnn`. `subsystem_id` is required by Proxmox when it creates the mapping, and it is on the `Subsystem:` line, which needs `-v`:
+
+   ```bash
+   lspci -Dnn -v -s 0000:00:02.0
+   ```
+
+   ```text
+   0000:00:02.0 VGA compatible controller [0300]: Intel Corporation ... [8086:4680]
+           Subsystem: ASRock Incorporation Device [1849:4680]
+   ```
+
+   `path` is `0000:00:02.0`, `id` is `8086:4680` (the first bracket), and `subsystem_id` is `1849:4680` (the `Subsystem:` bracket). It is usually not the same as `id`. `iommu_group` is optional. Find it with `find /sys/kernel/iommu_groups/ -type l | grep 0000:00:02.0`.
 
 The API token needs permission to manage mappings (`Mapping.Modify`, and `Mapping.Use` to attach them). The `root@pam` token without privilege separation from step 2 already has both.
 

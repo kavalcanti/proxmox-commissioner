@@ -53,7 +53,8 @@ vm:
 
 # PCI passthrough devices, created as datacenter resource mappings by `pvc site apply`.
 # A service attaches one with `pci_devices: [{mapping: igpu}]` on a host. The node needs
-# IOMMU enabled first (see docs/setup-guide.md). Values come from `lspci -Dnn` on the node.
+# IOMMU enabled first (see docs/setup-guide.md). path and id come from `lspci -Dnn`.
+# subsystem_id is required by Proxmox: the Subsystem: bracket from `lspci -Dnn -v`.
 # pci_mappings:
 #   igpu:
 #     comment: Intel iGPU for transcoding
@@ -61,7 +62,7 @@ vm:
 #       pve1:
 #         path: "0000:00:02.0"       # PCI address, with domain
 #         id: "8086:4680"            # vendor:device
-#         subsystem_id: "8086:2212"  # optional
+#         subsystem_id: "1849:4680"  # required, from `lspci -Dnn -v`
 #         iommu_group: 0             # optional
 
 # Defaults for every host of every service. A service's own `defaults` and each host

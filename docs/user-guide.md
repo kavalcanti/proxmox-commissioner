@@ -226,8 +226,8 @@ pci_mappings:
     nodes:
       pve1:
         path: "0000:00:02.0"      # lspci -Dnn
-        id: "8086:4680"           # vendor:device
-        subsystem_id: "8086:2212" # optional
+        id: "8086:4680"           # vendor:device, first bracket
+        subsystem_id: "1849:4680" # required; Subsystem: bracket from `lspci -Dnn -v`
         iommu_group: 0            # optional
 ```
 

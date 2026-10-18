@@ -226,8 +226,8 @@ pci_mappings:
     nodes:
       pve1:
         path: "0000:00:02.0"      # lspci -Dnn
-        id: "8086:4680"           # fabricante:dispositivo
-        subsystem_id: "8086:2212" # opcional
+        id: "8086:4680"           # fabricante:dispositivo, primeiro colchete
+        subsystem_id: "1849:4680" # obrigatório; colchete de Subsystem: em `lspci -Dnn -v`
         iommu_group: 0            # opcional
 ```
 
