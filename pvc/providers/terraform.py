@@ -33,6 +33,21 @@ def build_site_tfvars(site: SiteConfig) -> dict[str, Any]:
         **_provider_vars(site),
         "images_datastore": site.storage.images,
         "images": {name: image.url for name, image in site.images.items()},
+        "pci_mappings": {
+            name: {
+                "comment": mapping.comment or "",
+                "nodes": {
+                    node: {
+                        "path": entry.path,
+                        "id": entry.id,
+                        "subsystem_id": entry.subsystem_id or "",
+                        "iommu_group": entry.iommu_group if entry.iommu_group is not None else -1,
+                    }
+                    for node, entry in mapping.nodes.items()
+                },
+            }
+            for name, mapping in site.pci_mappings.items()
+        },
     }
 
 
@@ -55,6 +70,11 @@ def build_service_tfvars(site: SiteConfig, service: ResolvedService, ssh_public_
             "nameservers": list(host.nameservers),
             "mac": host.mac or "",
             "image_file_id": site.image_file_id(host.image),
+            "machine": host.machine or "",
+            "pci_devices": [
+                {"mapping": d.mapping, "pcie": d.pcie, "rombar": d.rombar, "x_vga": d.x_vga}
+                for d in host.pci_devices
+            ],
             "roles": list(host.roles),
         }
         for key, host in service.hosts.items()

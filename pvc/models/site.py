@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
-from .base import StrictModel
+from .base import NAME_PATTERN, StrictModel
+
+PCI_PATH_PATTERN = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$")
+PCI_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{4}$")
 
 DEBIAN_13_URL = (
     "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2"
@@ -80,6 +84,48 @@ class VmOptions(StrictModel):
     disk_format: str = "raw"
 
 
+class PciMappingNode(StrictModel):
+    """Where one mapped PCI device sits on one node (see `lspci -Dnn`)."""
+
+    # Full PCI address with domain, e.g. 0000:00:02.0.
+    path: str
+    # vendor:device, e.g. 8086:4680.
+    id: str
+    subsystem_id: str | None = None
+    iommu_group: int | None = Field(default=None, ge=0)
+
+    @field_validator("path")
+    @classmethod
+    def _path(cls, value: str) -> str:
+        if not PCI_PATH_PATTERN.match(value):
+            raise ValueError(f"path '{value}' must look like 0000:00:02.0 (see `lspci -D`)")
+        return value.lower()
+
+    @field_validator("id", "subsystem_id")
+    @classmethod
+    def _ids(cls, value: str | None) -> str | None:
+        if value is not None and not PCI_ID_PATTERN.match(value):
+            raise ValueError(f"'{value}' must look like 8086:4680 (see `lspci -nn`)")
+        return value.lower() if value else value
+
+
+class PciMapping(StrictModel):
+    """A datacenter PCI resource mapping: one logical device, one entry per node that has it."""
+
+    comment: str | None = None
+    nodes: dict[str, PciMappingNode] = Field(min_length=1)
+
+
+class PciDevice(StrictModel):
+    """A mapped device attached to a host (one `hostpciN` slot)."""
+
+    mapping: str
+    # PCIe instead of legacy PCI. Needs `machine: q35`.
+    pcie: bool = False
+    rombar: bool = True
+    x_vga: bool = False
+
+
 class HostDefaults(StrictModel):
     """Settings a host can inherit. Everything is optional so precedence can be resolved."""
 
@@ -98,6 +144,11 @@ class HostDefaults(StrictModel):
     # Fixed MAC address, e.g. BC:24:11:A7:A1:C5. Proxmox generates one when unset.
     mac: str | None = None
     image: str | None = None
+    # QEMU machine type. Unset keeps the Proxmox default (i440fx). PCIe passthrough needs q35.
+    machine: Literal["q35", "pc"] | None = None
+    # Mapped PCI devices (names from site.yml `pci_mappings`). The most specific layer that
+    # sets this replaces the earlier ones.
+    pci_devices: list[PciDevice] | None = None
     roles: list[str] = Field(default_factory=list)
     vars: dict[str, Any] = Field(default_factory=dict)
 
@@ -141,8 +192,18 @@ class SiteConfig(StrictModel):
     ssh: Ssh = Field(default_factory=Ssh)
     vm: VmOptions = Field(default_factory=VmOptions)
     defaults: HostDefaults = Field(default_factory=HostDefaults)
+    # Datacenter PCI resource mappings, created by `pvc site apply`. Hosts attach them by name.
+    pci_mappings: dict[str, PciMapping] = Field(default_factory=dict)
     ansible_vars: dict[str, Any] = Field(default_factory=dict)
     host_config: HostConfig = Field(default_factory=HostConfig)
+
+    @field_validator("pci_mappings")
+    @classmethod
+    def _mapping_names(cls, value: dict[str, PciMapping]) -> dict[str, PciMapping]:
+        for name in value:
+            if not NAME_PATTERN.match(name):
+                raise ValueError(f"pci mapping name '{name}' must be lowercase letters, digits and '-'")
+        return value
 
     @field_validator("images")
     @classmethod
@@ -151,6 +212,17 @@ class SiteConfig(StrictModel):
             if not name.replace("-", "").replace("_", "").replace(".", "").isalnum():
                 raise ValueError(f"image name '{name}' may only contain letters, digits, '-', '_' and '.'")
         return value
+
+    @model_validator(mode="after")
+    def _mapping_nodes_exist(self) -> "SiteConfig":
+        for name, mapping in self.pci_mappings.items():
+            unknown = [node for node in mapping.nodes if node not in self.nodes]
+            if unknown:
+                raise ValueError(
+                    f"pci_mappings.{name}: node(s) {', '.join(repr(n) for n in unknown)} "
+                    f"are not in `nodes` (known: {', '.join(self.nodes)})"
+                )
+        return self
 
     @property
     def default_image(self) -> str:

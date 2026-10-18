@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from pvc.manifest import resolve_service
+from pvc.models import PciMapping, PciMappingNode
 from pvc.providers.terraform import Workspace, build_service_tfvars, build_site_tfvars
 
 from .conftest import BLOG_RAW
@@ -82,3 +83,51 @@ def test_tfvars_file_is_private(tmp_path):
 
     assert json.loads(workspace.tfvars_file.read_text()) == {"a": 1}
     assert workspace.tfvars_file.stat().st_mode & 0o777 == 0o600
+
+
+def test_service_tfvars_carry_machine_and_pci_devices(site):
+    raw = {
+        "defaults": {"node": "pve1"},
+        "hosts": {"a": {"vm_id": 1300}},
+    }
+    pci_site = site.model_copy(
+        update={
+            "pci_mappings": {
+                "igpu": PciMapping(nodes={"pve1": PciMappingNode(path="0000:00:02.0", id="8086:4680")}),
+            }
+        }
+    )
+    raw["hosts"]["a"].update({"machine": "q35", "pci_devices": [{"mapping": "igpu", "pcie": True}]})
+
+    plain = build_service_tfvars(site, resolve_service(site, "blog", {"defaults": {"node": "pve1"}, "hosts": {"a": {"vm_id": 1300}}}), PUBLIC_KEY)
+    host = build_service_tfvars(pci_site, resolve_service(pci_site, "blog", raw), PUBLIC_KEY)["hosts"]["a"]
+
+    assert plain["hosts"]["a"]["machine"] == "" and plain["hosts"]["a"]["pci_devices"] == []
+    assert host["machine"] == "q35"
+    assert host["pci_devices"] == [{"mapping": "igpu", "pcie": True, "rombar": True, "x_vga": False}]
+
+
+def test_site_tfvars_carry_pci_mappings(site):
+    pci_site = site.model_copy(
+        update={
+            "pci_mappings": {
+                "igpu": PciMapping(
+                    comment="Intel iGPU",
+                    nodes={"pve1": PciMappingNode(path="0000:00:02.0", id="8086:4680", iommu_group=0)},
+                ),
+                "nic": PciMapping(nodes={"pve2": PciMappingNode(path="0000:03:00.0", id="8086:1533", subsystem_id="8086:0001")}),
+            }
+        }
+    )
+
+    mappings = build_site_tfvars(pci_site)["pci_mappings"]
+
+    assert mappings["igpu"] == {
+        "comment": "Intel iGPU",
+        "nodes": {"pve1": {"path": "0000:00:02.0", "id": "8086:4680", "subsystem_id": "", "iommu_group": 0}},
+    }
+    # Unset optional values are sentinels the Terraform side turns back into null.
+    nic = mappings["nic"]
+    assert nic["comment"] == "" and nic["nodes"]["pve2"]["iommu_group"] == -1
+    assert nic["nodes"]["pve2"]["subsystem_id"] == "8086:0001"
+    assert build_site_tfvars(site)["pci_mappings"] == {}

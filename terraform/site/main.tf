@@ -24,3 +24,22 @@ resource "proxmox_download_file" "image" {
 
   overwrite_unmanaged = true
 }
+
+# PCI passthrough devices are cluster-wide objects too. API tokens can only attach a
+# device to a VM through a mapping, so hosts reference these by name.
+resource "proxmox_hardware_mapping_pci" "this" {
+  for_each = var.pci_mappings
+
+  name    = each.key
+  comment = each.value.comment == "" ? null : each.value.comment
+
+  map = [
+    for node, device in each.value.nodes : {
+      node         = node
+      path         = device.path
+      id           = device.id
+      subsystem_id = device.subsystem_id == "" ? null : device.subsystem_id
+      iommu_group  = device.iommu_group < 0 ? null : device.iommu_group
+    }
+  ]
+}

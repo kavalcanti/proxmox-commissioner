@@ -10,7 +10,7 @@ from pydantic import ConfigDict, Field
 
 from .. import paths
 from .base import StrictModel
-from .site import HostDefaults, NetworkOverrides
+from .site import HostDefaults, NetworkOverrides, PciDevice
 
 
 class HostSpec(HostDefaults):
@@ -48,6 +48,8 @@ class ResolvedHost:
     nameservers: tuple[str, ...]
     mac: str | None
     image: str
+    machine: str | None
+    pci_devices: tuple[PciDevice, ...]
     roles: tuple[str, ...]
     vars: dict[str, Any] = field(default_factory=dict)
 

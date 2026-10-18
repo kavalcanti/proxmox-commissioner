@@ -60,6 +60,23 @@ variable "vm_disk_size" {
   }
 }
 
+variable "vm_machine" {
+  description = "QEMU machine type (q35 or pc). Null keeps the Proxmox default."
+  type        = string
+  default     = null
+}
+
+variable "pci_devices" {
+  description = "Mapped PCI devices to pass through, attached as hostpci0, hostpci1, ..."
+  type = list(object({
+    mapping = string
+    pcie    = optional(bool, false)
+    rombar  = optional(bool, true)
+    x_vga   = optional(bool, false)
+  }))
+  default = []
+}
+
 # ------------------------------------------------------------------------------
 # Image and storage
 # ------------------------------------------------------------------------------

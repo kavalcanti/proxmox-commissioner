@@ -11,6 +11,8 @@ module "vm" {
   vm_sockets   = each.value.sockets
   vm_memory    = each.value.memory
   vm_disk_size = each.value.disk
+  vm_machine   = each.value.machine == "" ? null : each.value.machine
+  pci_devices  = each.value.pci_devices
 
   image_file_id       = each.value.image_file_id
   datastore_disk      = var.storage.disk

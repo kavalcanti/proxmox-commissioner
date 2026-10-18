@@ -13,6 +13,7 @@ from ..models import (
     MAC_PATTERN,
     MIN_VM_ID,
     NAME_PATTERN,
+    PciDevice,
     ResolvedHost,
     ResolvedService,
     ServiceFile,
@@ -137,6 +138,10 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
         if spec.vm_id < MIN_VM_ID:
             problems.append(f"{where}: vm_id must be {MIN_VM_ID} or higher")
 
+        machine = merged.get("machine")
+        pci_devices = tuple(PciDevice.model_validate(d) for d in merged.get("pci_devices") or ())
+        problems.extend(_pci_problems(site, where, node, machine, pci_devices))
+
         hosts[key] = ResolvedHost(
             key=key,
             name=vm_name,
@@ -154,6 +159,8 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
             nameservers=nameservers,
             mac=mac,
             image=image,
+            machine=machine,
+            pci_devices=pci_devices,
             roles=tuple(expand_roles([r for r in roles if r in KNOWN_ROLES or r == BASE_ROLE])),
             vars=merged["vars"],
         )
@@ -162,10 +169,50 @@ def resolve_service(site: SiteConfig, name: str, raw: Any, source: str | None = 
     problems.extend(_duplicates(hosts.values(), "VM name", lambda h: h.name))
     problems.extend(_duplicates([h for h in hosts.values() if h.address], "ip", lambda h: h.address))
     problems.extend(_duplicates([h for h in hosts.values() if h.mac], "mac", lambda h: h.mac))
+    problems.extend(_shared_pci_mappings(hosts.values()))
 
     if problems:
         raise ConfigError(source, problems)
     return ResolvedService(name=name, hosts=hosts)
+
+
+def _pci_problems(
+    site: SiteConfig, where: str, node: str, machine: str | None, devices: tuple[PciDevice, ...]
+) -> list[str]:
+    problems = []
+    seen: set[str] = set()
+    for index, device in enumerate(devices):
+        at = f"{where}.pci_devices[{index}]"
+        mapping = site.pci_mappings.get(device.mapping)
+        if mapping is None:
+            known = ", ".join(site.pci_mappings) or "none defined"
+            problems.append(f"{at}: mapping '{device.mapping}' is not in site.yml pci_mappings (known: {known})")
+        elif node and node not in mapping.nodes:
+            problems.append(
+                f"{at}: mapping '{device.mapping}' has no entry for node '{node}' "
+                f"(it covers: {', '.join(mapping.nodes)})"
+            )
+        if device.mapping in seen:
+            problems.append(f"{at}: mapping '{device.mapping}' is listed more than once on this host")
+        seen.add(device.mapping)
+        if device.pcie and machine != "q35":
+            problems.append(f"{at}: pcie: true needs `machine: q35` on this host")
+    return problems
+
+
+def _shared_pci_mappings(hosts: Iterable[ResolvedHost]) -> list[str]:
+    """A passthrough device can only belong to one running VM."""
+    owners: dict[str, str] = {}
+    problems = []
+    for host in hosts:
+        for mapping in {device.mapping for device in host.pci_devices}:
+            if mapping in owners:
+                problems.append(
+                    f"hosts.{owners[mapping]} and hosts.{host.key} both use pci mapping '{mapping}'"
+                )
+            else:
+                owners[mapping] = host.key
+    return problems
 
 
 def _duplicates(

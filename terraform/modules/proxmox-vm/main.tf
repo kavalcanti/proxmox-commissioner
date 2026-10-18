@@ -15,6 +15,8 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   started = true
 
+  machine = var.vm_machine
+
   agent {
     enabled = var.enable_qemu_agent
 
@@ -35,6 +37,19 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   memory {
     dedicated = var.vm_memory
+  }
+
+  # Devices come from datacenter resource mappings (terraform/site), the only way an API
+  # token can attach PCI hardware. Passthrough needs IOMMU enabled on the node.
+  dynamic "hostpci" {
+    for_each = { for index, device in var.pci_devices : "hostpci${index}" => device }
+    content {
+      device  = hostpci.key
+      mapping = hostpci.value.mapping
+      pcie    = hostpci.value.pcie
+      rombar  = hostpci.value.rombar
+      xvga    = hostpci.value.x_vga
+    }
   }
 
   # The disk is imported straight from the cloud image downloaded by terraform/site,

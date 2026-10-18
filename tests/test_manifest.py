@@ -305,3 +305,108 @@ def test_scaffold_is_valid_yaml_that_resolves(site):
 
     assert [host.vm_id for host in service.hosts.values()] == [1500, 1501]
     assert "# ip:" in text
+
+
+# ------------------------------------------------------------------------------
+# PCI passthrough
+# ------------------------------------------------------------------------------
+@pytest.fixture
+def pci_site():
+    from pvc.manifest import parse_site
+
+    from .conftest import SITE_RAW
+
+    raw = copy.deepcopy(SITE_RAW)
+    raw["pci_mappings"] = {
+        "igpu": {"nodes": {"pve1": {"path": "0000:00:02.0", "id": "8086:4680"}}},
+        "nic": {"nodes": {"pve1": {"path": "0000:03:00.0", "id": "8086:1533"}, "pve2": {"path": "0000:03:00.0", "id": "8086:1533"}}},
+    }
+    return parse_site(raw)
+
+
+def pci_raw(*devices, machine=None, node="pve1"):
+    host = {"vm_id": 1600, "node": node, "pci_devices": list(devices)}
+    if machine:
+        host["machine"] = machine
+    return {"hosts": {"a": host}}
+
+
+def test_pci_devices_resolve_with_defaults(pci_site):
+    host = resolve(pci_site, pci_raw({"mapping": "igpu"})).hosts["a"]
+
+    assert host.machine is None
+    assert [(d.mapping, d.pcie, d.rombar, d.x_vga) for d in host.pci_devices] == [("igpu", False, True, False)]
+
+
+def test_pci_devices_from_service_defaults_and_host_replaces(pci_site):
+    raw = {
+        "defaults": {"node": "pve1", "pci_devices": [{"mapping": "igpu"}]},
+        "hosts": {"a": {"vm_id": 1600}, "b": {"vm_id": 1601, "pci_devices": [{"mapping": "nic"}]}},
+    }
+    # Both hosts end up with a device; the host-level list replaces the default one.
+    hosts = resolve(pci_site, raw).hosts
+
+    assert [d.mapping for d in hosts["a"].pci_devices] == ["igpu"]
+    assert [d.mapping for d in hosts["b"].pci_devices] == ["nic"]
+
+
+def test_pcie_with_q35(pci_site):
+    host = resolve(pci_site, pci_raw({"mapping": "igpu", "pcie": True}, machine="q35")).hosts["a"]
+
+    assert host.machine == "q35" and host.pci_devices[0].pcie
+
+
+def test_unknown_pci_mapping_is_reported(pci_site):
+    assert "mapping 'gpu'" in problems(pci_site, pci_raw({"mapping": "gpu"}))
+
+
+def test_pci_mapping_must_cover_the_hosts_node(pci_site):
+    text = problems(pci_site, pci_raw({"mapping": "igpu"}, node="pve2"))
+
+    assert "no entry for node 'pve2'" in text and "pve1" in text
+
+
+def test_pcie_needs_q35(pci_site):
+    assert "machine: q35" in problems(pci_site, pci_raw({"mapping": "igpu", "pcie": True}))
+
+
+def test_same_pci_mapping_twice_on_a_host_is_rejected(pci_site):
+    assert "more than once" in problems(pci_site, pci_raw({"mapping": "igpu"}, {"mapping": "igpu"}))
+
+
+def test_same_pci_mapping_on_two_hosts_of_a_service_is_rejected(pci_site):
+    raw = {
+        "defaults": {"node": "pve1", "pci_devices": [{"mapping": "igpu"}]},
+        "hosts": {"a": {"vm_id": 1600}, "b": {"vm_id": 1601}},
+    }
+
+    assert "both use pci mapping 'igpu'" in problems(pci_site, raw)
+
+
+def test_pci_mapping_clash_between_services_is_caught(pci_site, project):
+    other = resolve_service(pci_site, "other", pci_raw({"mapping": "igpu"}))
+    mine = resolve_service(pci_site, "blog", {"hosts": {"b": {"vm_id": 1700, "node": "pve1", "pci_devices": [{"mapping": "igpu"}]}}})
+
+    text = "\n".join(conflicts_between(mine, [other]))
+
+    assert "pci mapping 'igpu'" in text and "'other'" in text
+
+
+def test_pci_mapping_definitions_are_validated():
+    from pvc.manifest import parse_site
+
+    from .conftest import SITE_RAW
+
+    def site_with(mappings):
+        return {**SITE_RAW, "pci_mappings": mappings}
+
+    node = {"path": "0000:00:02.0", "id": "8086:4680"}
+    for bad, expected in [
+        ({"igpu": {"nodes": {"pve1": {**node, "path": "00:02.0"}}}}, "0000:00:02.0"),
+        ({"igpu": {"nodes": {"pve1": {**node, "id": "8086"}}}}, "8086:4680"),
+        ({"igpu": {"nodes": {"pve9": node}}}, "pve9"),
+        ({"Bad_Name": {"nodes": {"pve1": node}}}, "Bad_Name"),
+    ]:
+        with pytest.raises(ConfigError) as error:
+            parse_site(site_with(bad))
+        assert expected in str(error.value)

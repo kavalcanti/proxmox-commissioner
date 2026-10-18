@@ -27,6 +27,12 @@ def conflicts_between(service: ResolvedService, others: list[ResolvedService]) -
                         f"hosts.{mine.key}: mac {mine.mac} is already used by service "
                         f"'{other.name}' (host '{theirs.key}')"
                     )
+                for device in mine.pci_devices:
+                    if any(device.mapping == other_device.mapping for other_device in theirs.pci_devices):
+                        problems.append(
+                            f"hosts.{mine.key}: pci mapping '{device.mapping}' is already used by service "
+                            f"'{other.name}' (host '{theirs.key}')"
+                        )
                 if mine.address and mine.address == theirs.address:
                     problems.append(
                         f"hosts.{mine.key}: ip {mine.address} is already used by service "

@@ -48,7 +48,14 @@ variable "hosts" {
     nameservers   = list(string)
     mac           = string
     image_file_id = string
-    roles         = list(string)
+    machine       = string
+    pci_devices = list(object({
+      mapping = string
+      pcie    = bool
+      rombar  = bool
+      x_vga   = bool
+    }))
+    roles = list(string)
   }))
 }
 

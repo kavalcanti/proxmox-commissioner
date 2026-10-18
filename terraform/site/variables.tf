@@ -31,3 +31,17 @@ variable "images" {
   description = "Image name => download URL"
   type        = map(string)
 }
+
+variable "pci_mappings" {
+  description = "Datacenter PCI resource mappings: name => per-node device. Empty string / -1 mean unset."
+  type = map(object({
+    comment = string
+    nodes = map(object({
+      path         = string
+      id           = string
+      subsystem_id = string
+      iommu_group  = number
+    }))
+  }))
+  default = {}
+}
