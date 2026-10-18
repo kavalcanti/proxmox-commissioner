@@ -17,6 +17,8 @@ DEBIAN_13_URL = (
 class ProxmoxConnection(StrictModel):
     endpoint: str
     ssh_user: str = "root"
+    # SSH port on the nodes. Used by `pvc site configure` (Ansible).
+    ssh_port: int = Field(default=22, ge=1, le=65535)
     # Optional. When set, the key is loaded into a throwaway ssh-agent for Terraform.
     # When unset, the ssh-agent already in the environment is used.
     ssh_key: str | None = None
@@ -25,6 +27,8 @@ class ProxmoxConnection(StrictModel):
 
 class Node(StrictModel):
     address: str
+    # Set to false to leave this node out of `pvc site configure`.
+    configure: bool = True
 
 
 class Storage(StrictModel):
@@ -105,6 +109,29 @@ DEFAULT_ANSIBLE_VARS: dict[str, Any] = {
 }
 
 
+class ExporterOptions(StrictModel):
+    enabled: bool = True
+    port: int = Field(default=9100, ge=1, le=65535)
+
+
+class SmartctlExporterOptions(ExporterOptions):
+    port: int = Field(default=9633, ge=1, le=65535)
+    # Empty = let smartctl_exporter discover the disks itself.
+    devices: list[str] = Field(default_factory=list)
+
+
+class HostConfig(StrictModel):
+    """What `pvc site configure` installs on the Proxmox nodes themselves.
+
+    Each exporter listens on `<node address>:<port>`. pvc does not touch the PVE firewall.
+    """
+
+    node_exporter: ExporterOptions = Field(default_factory=ExporterOptions)
+    smartctl_exporter: SmartctlExporterOptions = Field(default_factory=SmartctlExporterOptions)
+    # Extra Ansible variables for every node.
+    vars: dict[str, Any] = Field(default_factory=dict)
+
+
 class SiteConfig(StrictModel):
     proxmox: ProxmoxConnection
     nodes: dict[str, Node] = Field(min_length=1)
@@ -115,6 +142,7 @@ class SiteConfig(StrictModel):
     vm: VmOptions = Field(default_factory=VmOptions)
     defaults: HostDefaults = Field(default_factory=HostDefaults)
     ansible_vars: dict[str, Any] = Field(default_factory=dict)
+    host_config: HostConfig = Field(default_factory=HostConfig)
 
     @field_validator("images")
     @classmethod
