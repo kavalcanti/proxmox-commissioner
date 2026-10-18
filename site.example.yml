@@ -5,6 +5,8 @@ proxmox:
   endpoint: https://pve1.lan:8006/
   # SSH user on the nodes. Terraform needs it to upload cloud-init snippets.
   ssh_user: root
+  # SSH port on the nodes, used by `pvc site configure`.
+  ssh_port: 22
   # Optional. Loaded into a throwaway ssh-agent for each run. Leave unset to use
   # the ssh-agent already running in your shell.
   # ssh_key: ~/.ssh/proxmox
@@ -15,6 +17,7 @@ proxmox:
 nodes:
   pve1:
     address: 172.20.10.110
+    # configure: false        # leave this node out of `pvc site configure`
   # pve2:
   #   address: 172.20.10.111
 
@@ -67,3 +70,16 @@ ansible_vars:
   # webserver_cert_name: example.com
   # webserver_cert_email: you@example.com
   # webserver_cert_domain_wildcard: "*.example.com"
+
+# What `pvc site configure` installs on the Proxmox nodes themselves. Each exporter
+# listens on the node's address from `nodes` (<address>:<port>). pvc does not touch
+# the PVE firewall: restrict these ports to your scraper there.
+host_config:
+  node_exporter:
+    enabled: true
+    port: 9100
+  smartctl_exporter:
+    enabled: true
+    port: 9633
+    devices: []             # empty = smartctl_exporter discovers the disks itself
+  vars: {}                  # extra Ansible variables for every node
