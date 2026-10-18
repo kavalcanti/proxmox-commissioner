@@ -212,11 +212,55 @@ Set `node` per host (or in `defaults`). Terraform creates each VM directly on it
 
 Changing a host's `node` and running `pvc up` live-migrates the VM instead of recreating it.
 
+## Proxmox host monitoring
+
+`pvc site configure` installs Prometheus exporters on the Proxmox nodes themselves, using the SSH access in `proxmox.ssh_user`, `proxmox.ssh_port` (default 22) and `proxmox.ssh_key`.
+
+```yaml
+# site.yml
+host_config:
+  node_exporter:
+    enabled: true
+    port: 9100
+  smartctl_exporter:
+    enabled: true
+    port: 9633
+    devices: []        # empty = the exporter discovers the disks itself
+  vars: {}             # extra Ansible variables for every node
+```
+
+```bash
+pvc site configure                       # every node
+pvc site configure --node pve1           # one node
+pvc site configure --tags smartctl_exporter
+```
+
+- Each exporter listens on the node's address from `nodes` (`<address>:<port>`). Set `configure: false` on a node to skip it.
+- pvc does not touch the PVE firewall. Restrict ports 9100 and 9633 to your Prometheus server there.
+- Node Exporter comes from the Debian package. Debian has no smartctl_exporter package, so the pinned upstream release is downloaded, checksum-verified and run as the root `smartctl-exporter` systemd unit (SMART needs raw disk access). Bump `smartctl_exporter_version` and `smartctl_exporter_checksums` together, through `host_config.vars`.
+- With a non-root `ssh_user`, Ansible uses sudo. If sudo asks for a password, put `proxmox_become_password` in `secrets.yml`.
+- The nodes are configured by `ansible/pve-hosts.yml`, never by the VM playbook, so SSH, fail2ban and UFW on the nodes are left alone.
+
+Then add the nodes to Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: pve_node_exporter
+    static_configs:
+      - targets: [172.20.10.110:9100]
+        labels: {hostname: pve1}
+  - job_name: pve_smartctl
+    scrape_interval: 60s
+    static_configs:
+      - targets: [172.20.10.110:9633]
+        labels: {hostname: pve1}
+```
+
 ## Configuration files
 
 | File | Purpose |
 |------|---------|
-| `site.yml` | Proxmox endpoint, nodes, storage, network, images, SSH port and user, default VM sizes, shared Ansible variables |
+| `site.yml` | Proxmox endpoint, nodes, storage, network, images, SSH port and user, default VM sizes, shared Ansible variables, Proxmox host exporters (`host_config`) |
 | `secrets.yml` | Ansible-vault encrypted: `proxmox_api_token`, `vault_devops_password`, `vault_cloudflare_api_token` |
 | `services/<svc>/service.yml` | Hosts of a service |
 

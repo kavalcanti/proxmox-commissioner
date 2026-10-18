@@ -57,6 +57,7 @@ Leia o [Guia de configuração](docs/setup-guide.pt-br.md) e o [Guia do Usuário
 |---------|-----------|
 | `pvc init` | Cria `site.yml` e `secrets.yml`, instala as collections do Ansible, confere os pré-requisitos |
 | `pvc site apply` | Baixa as imagens cloud listadas em `site.yml` para todos os nós |
+| `pvc site configure [--node n] [--tags t]` | Instala node_exporter e smartctl_exporter nos nós Proxmox |
 | `pvc new <svc> [--hosts a,b]` | Cria o esqueleto de `services/<svc>/service.yml` |
 | `pvc validate [svc]` | Valida manifestos offline |
 | `pvc plan <svc>` | Valida e roda `terraform plan` |
@@ -71,6 +72,7 @@ Leia o [Guia de configuração](docs/setup-guide.pt-br.md) e o [Guia do Usuário
 ```
 pyproject.toml                  # projeto uv, entrada `pvc`
 pvc/                            # a CLI
+  site/                         # trabalho no nível do cluster: download de imagens, configuração dos nós Proxmox
 site.example.yml                # configurações do cluster (copie: site.yml, gitignored)
 secrets.example.yml             # segredos (copie: secrets.yml, criptografe, gitignored)
 terraform/
@@ -78,7 +80,8 @@ terraform/
   service/                      # um root compartilhado por todos os serviços, for_each nos hosts
   modules/proxmox-vm/           # VM + cloud-init já protegido
 ansible/
-  site.yml                      # o único playbook; um play por grupo de role
+  site.yml                      # o playbook das VMs; um play por grupo de role
+  pve-hosts.yml                 # os próprios nós Proxmox (`pvc site configure`)
   roles/
 services/<svc>/
   service.yml                   # o único arquivo que você edita

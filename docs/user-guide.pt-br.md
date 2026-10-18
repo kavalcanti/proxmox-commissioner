@@ -212,11 +212,55 @@ Defina `node` por host (ou em `defaults`). O Terraform cria cada VM direto no se
 
 Mudar o `node` de um host e rodar `pvc up` faz migração ao vivo da VM em vez de recriá-la.
 
+## Monitoramento dos hosts Proxmox
+
+O `pvc site configure` instala exporters do Prometheus nos próprios nós Proxmox, usando o acesso SSH de `proxmox.ssh_user`, `proxmox.ssh_port` (padrão 22) e `proxmox.ssh_key`.
+
+```yaml
+# site.yml
+host_config:
+  node_exporter:
+    enabled: true
+    port: 9100
+  smartctl_exporter:
+    enabled: true
+    port: 9633
+    devices: []        # vazio = o exporter descobre os discos sozinho
+  vars: {}             # variáveis Ansible extras para todos os nós
+```
+
+```bash
+pvc site configure                       # todos os nós
+pvc site configure --node pve1           # um nó
+pvc site configure --tags smartctl_exporter
+```
+
+- Cada exporter escuta no endereço do nó em `nodes` (`<endereço>:<porta>`). Use `configure: false` em um nó para pulá-lo.
+- O pvc não mexe no firewall do PVE. Restrinja as portas 9100 e 9633 ao seu servidor Prometheus lá.
+- O Node Exporter vem do pacote Debian. O Debian não tem pacote do smartctl_exporter, então o release oficial fixado é baixado, tem o checksum verificado e roda como a unit systemd `smartctl-exporter`, como root (o SMART precisa de acesso direto ao disco). Atualize `smartctl_exporter_version` e `smartctl_exporter_checksums` juntos, via `host_config.vars`.
+- Com um `ssh_user` que não seja root, o Ansible usa sudo. Se o sudo pedir senha, coloque `proxmox_become_password` no `secrets.yml`.
+- Os nós são configurados pelo `ansible/pve-hosts.yml`, nunca pelo playbook das VMs, então SSH, fail2ban e UFW dos nós ficam intocados.
+
+Depois adicione os nós ao Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: pve_node_exporter
+    static_configs:
+      - targets: [172.20.10.110:9100]
+        labels: {hostname: pve1}
+  - job_name: pve_smartctl
+    scrape_interval: 60s
+    static_configs:
+      - targets: [172.20.10.110:9633]
+        labels: {hostname: pve1}
+```
+
 ## Arquivos de configuração
 
 | Arquivo | Finalidade |
 |---------|------------|
-| `site.yml` | Endpoint do Proxmox, nós, storage, rede, imagens, porta e usuário SSH, tamanhos padrão de VM, variáveis Ansible compartilhadas |
+| `site.yml` | Endpoint do Proxmox, nós, storage, rede, imagens, porta e usuário SSH, tamanhos padrão de VM, variáveis Ansible compartilhadas, exporters dos hosts Proxmox (`host_config`) |
 | `secrets.yml` | Criptografado com ansible-vault: `proxmox_api_token`, `vault_devops_password`, `vault_cloudflare_api_token` |
 | `services/<svc>/service.yml` | Hosts de um serviço |
 
