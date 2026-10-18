@@ -91,6 +91,18 @@ Lembre que os VM IDs precisam ser únicos em todo o cluster. O `pvc` confere iss
 
 O Debian é o SO para o qual as roles do Ansible foram escritas. Outras distros baseadas em Debian provavelmente funcionam se você as adicionar em `images` e apontar o `image` de um host para elas.
 
+## Preparação do host para passthrough de PCI
+
+Só é necessária para hosts que usam `pci_devices` (veja o [guia do usuário](user-guide.pt-br.md#passthrough-de-pci)). O `pvc` não altera a configuração de kernel dos nós Proxmox, pois isso exige reboot.
+
+1. Habilite o IOMMU na BIOS (VT-d na Intel, AMD-Vi / IOMMU na AMD).
+2. Adicione parâmetros de kernel. Na Intel, em `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt"`) e depois `update-grub`, ou em `/etc/kernel/cmdline` seguido de `proxmox-boot-tool refresh` em instalações com systemd-boot. Na AMD o IOMMU vem habilitado por padrão, `iommu=pt` basta.
+3. Carregue os módulos VFIO adicionando `vfio`, `vfio_iommu_type1` e `vfio_pci` em `/etc/modules`, e reinicie.
+4. Confirme com `dmesg | grep -e DMAR -e IOMMU`.
+5. Descubra os valores para o `site.yml` com `lspci -Dnn` (o endereço, como `0000:00:02.0`, e os ids `[8086:4680]`), e o grupo com `find /sys/kernel/iommu_groups/ -type l | grep 0000:00:02.0`.
+
+O token de API precisa de permissão para gerenciar mappings (`Mapping.Modify`, e `Mapping.Use` para anexá-los). O token `root@pam` sem separação de privilégios do passo 2 já tem ambas.
+
 ## Problemas comuns na configuração
 
 - **`pvc up` falha ao importar o disco.** A imagem não foi baixada para aquele nó. Rode `pvc site apply` e confira se todos os nós usados por um serviço estão em `nodes` no `site.yml`.

@@ -92,6 +92,18 @@ Note VM IDs must be unique across the whole cluster. `pvc` checks this across al
 
 Debian is the OS the Ansible roles are written for. Other Debian-based distros will probably work if you add them under `images` and point a host's `image` at them.
 
+## PCI passthrough host preparation
+
+Only needed for hosts that use `pci_devices` (see the [user guide](user-guide.md#pci-passthrough)). `pvc` does not change the Proxmox nodes' kernel configuration, because it needs a reboot.
+
+1. Enable the IOMMU in the BIOS (VT-d on Intel, AMD-Vi / IOMMU on AMD).
+2. Add kernel parameters. For Intel, in `/etc/default/grub` (`GRUB_CMDLINE_LINUX_DEFAULT="quiet intel_iommu=on iommu=pt"`) then `update-grub`, or in `/etc/kernel/cmdline` followed by `proxmox-boot-tool refresh` on systemd-boot installs. AMD enables the IOMMU by default, `iommu=pt` is enough.
+3. Load the VFIO modules by adding `vfio`, `vfio_iommu_type1` and `vfio_pci` to `/etc/modules`, then reboot.
+4. Check it worked with `dmesg | grep -e DMAR -e IOMMU`.
+5. Find the device values for `site.yml` with `lspci -Dnn` (the address, such as `0000:00:02.0`, and the `[8086:4680]` ids), and the group with `find /sys/kernel/iommu_groups/ -type l | grep 0000:00:02.0`.
+
+The API token needs permission to manage mappings (`Mapping.Modify`, and `Mapping.Use` to attach them). The `root@pam` token without privilege separation from step 2 already has both.
+
 ## Known setup pitfalls
 
 - **`pvc up` fails importing the disk.** The image has not been downloaded to that node. Run `pvc site apply`, and make sure every node a service uses is listed under `nodes` in `site.yml`.

@@ -107,6 +107,8 @@ hosts:
 | `model` | `network.model` | Modelo da NIC, ex.: `virtio` |
 | `mac` | gerado pelo Proxmox | `XX:XX:XX:XX:XX:XX`, único no cluster |
 | `image` | primeira imagem do `site.yml` | Uma chave de `images` |
+| `machine` | padrão do Proxmox (`i440fx`) | `q35` ou `pc`. Dispositivos com `pcie: true` exigem `q35` |
+| `pci_devices` | nenhum | Lista de dispositivos PCI mapeados, veja [Passthrough de PCI](#passthrough-de-pci) |
 | `roles` | nenhuma | Veja a tabela abaixo |
 | `vars` | nenhuma | Variáveis de host para o Ansible |
 
@@ -211,6 +213,45 @@ O `pvc converge` nunca toca no Proxmox, então é rápido. Use `pvc up` quando o
 Defina `node` por host (ou em `defaults`). O Terraform cria cada VM direto no seu nó, usando a imagem baixada lá. Todo nó precisa estar listado no `site.yml`.
 
 Mudar o `node` de um host e rodar `pvc up` faz migração ao vivo da VM em vez de recriá-la.
+
+## Passthrough de PCI
+
+Um token de API não consegue anexar um endereço PCI cru a uma VM, apenas um **resource mapping** do datacenter. Por isso o dispositivo é declarado uma vez no `site.yml` e referenciado pelo nome em um host.
+
+```yaml
+# site.yml
+pci_mappings:
+  igpu:
+    comment: iGPU Intel para transcodificação
+    nodes:
+      pve1:
+        path: "0000:00:02.0"      # lspci -Dnn
+        id: "8086:4680"           # fabricante:dispositivo
+        subsystem_id: "8086:2212" # opcional
+        iommu_group: 0            # opcional
+```
+
+```yaml
+# services/<servico>/service.yml
+hosts:
+  media:
+    machine: q35          # só necessário com pcie: true
+    pci_devices:
+      - mapping: igpu
+        pcie: true        # padrão false
+        rombar: true      # padrão true
+        x_vga: false      # padrão false
+```
+
+Rode `pvc site apply` para criar os mappings (eles têm estado Terraform próprio, então `pvc down` nunca remove um), depois `pvc up <servico>`. Cada item vira `hostpci0`, `hostpci1` e assim por diante. `pci_devices` é uma lista: a camada mais específica que a define (host sobre `defaults`) substitui as outras.
+
+O `pvc validate` confere se o mapping existe, se tem entrada para o `node` do host, se `pcie: true` vem com `machine: q35` e se um mapping não é usado duas vezes. Um dispositivo só pode pertencer a uma VM, então o mesmo mapping não pode ser usado por dois hosts, nem em serviços diferentes.
+
+Observações:
+
+- O nó precisa ter o IOMMU habilitado. O `pvc` não mexe na linha de comando do kernel, veja [o guia de configuração](setup-guide.pt-br.md#preparação-do-host-para-passthrough-de-pci).
+- Uma VM com dispositivo em passthrough não pode ser migrada ao vivo. Mudar o `node` é rejeitado a menos que o mapping tenha entrada para o novo nó, e o Proxmox ainda recusa a migração ao vivo.
+- Alterar `pci_devices` ou `machine` em uma VM existente faz o Proxmox aplicar a mudança de hardware no próximo boot. Se você anexou o dispositivo manualmente na interface web antes, remova essa entrada antes de rodar `pvc up`.
 
 ## Monitoramento dos hosts Proxmox
 
