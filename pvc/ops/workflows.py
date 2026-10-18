@@ -20,7 +20,6 @@ from ..providers.secrets import REQUIRED_KEYS, Secrets, load_secrets
 from ..providers.terraform import (
     Workspace,
     build_service_tfvars,
-    build_site_tfvars,
     proxmox_ssh_agent,
     service_hosts_output,
     service_workspace,
@@ -51,22 +50,6 @@ def prepare_service_workspace(
     workspace = service_workspace(service.name, secrets.terraform_env(service.name))
     workspace.write_tfvars(build_service_tfvars(site, service, public_key))
     return workspace, private_key
-
-
-# ------------------------------------------------------------------------------
-# Site
-# ------------------------------------------------------------------------------
-def apply_site(*, yes: bool = False) -> None:
-    """Download the cloud images listed in site.yml to every node."""
-    site = load_site()
-    secrets = load_secrets()
-    secrets.require("proxmox_api_token")
-
-    workspace = site_workspace(secrets.proxmox_env())
-    workspace.write_tfvars(build_site_tfvars(site))
-    with proxmox_ssh_agent(site):
-        workspace.init()
-        workspace.apply(auto_approve=yes)
 
 
 # ------------------------------------------------------------------------------

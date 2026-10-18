@@ -2,7 +2,6 @@
 
 from .workflows import (
     ServiceStatus,
-    apply_site,
     build_ssh_exec_args,
     converge_existing,
     converge_service,
@@ -18,7 +17,6 @@ from .workflows import (
 
 __all__ = [
     "ServiceStatus",
-    "apply_site",
     "build_ssh_exec_args",
     "converge_existing",
     "converge_service",
