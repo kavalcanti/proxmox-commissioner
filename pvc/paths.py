@@ -20,9 +20,12 @@ TERRAFORM_SERVICE_DIR = TERRAFORM_DIR / "service"
 ANSIBLE_DIR = ROOT / "ansible"
 ANSIBLE_PLAYBOOK = ANSIBLE_DIR / "site.yml"
 ANSIBLE_REQUIREMENTS = ANSIBLE_DIR / "requirements.yml"
+# Configures the Proxmox nodes themselves, separate from the VM playbook on purpose.
+ANSIBLE_HOSTS_PLAYBOOK = ANSIBLE_DIR / "pve-hosts.yml"
 
 # Image downloads are shared by every service, so they keep their own state.
 SITE_STATE_DIR = ROOT / ".pvc" / "site"
+SITE_HOSTS_INVENTORY = SITE_STATE_DIR / "hosts-inventory.yml"
 
 
 def service_dir(name: str) -> Path:

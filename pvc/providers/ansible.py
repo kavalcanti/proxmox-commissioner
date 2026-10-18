@@ -33,18 +33,19 @@ def ensure_collections() -> None:
 
 def build_playbook_command(
     inventory: Path,
-    secrets: Secrets,
+    secrets: Secrets | None,
     limit: str | None = None,
     tags: list[str] | None = None,
     post_deploy: bool = False,
     extra_args: list[str] | None = None,
+    playbook: Path | None = None,
 ) -> list[str]:
     command = [
         find_tool("ansible-playbook"),
         "-i",
         str(inventory),
-        str(paths.ANSIBLE_PLAYBOOK),
-        *secrets.ansible_args(),
+        str(playbook or paths.ANSIBLE_PLAYBOOK),
+        *(secrets.ansible_args() if secrets else []),
     ]
     if limit:
         command += ["--limit", limit]
@@ -61,12 +62,13 @@ def build_playbook_command(
 
 def run_playbook(
     inventory: Path,
-    secrets: Secrets,
+    secrets: Secrets | None,
     limit: str | None = None,
     tags: list[str] | None = None,
     post_deploy: bool = False,
+    playbook: Path | None = None,
 ) -> None:
     ensure_collections()
-    command = build_playbook_command(inventory, secrets, limit, tags, post_deploy)
+    command = build_playbook_command(inventory, secrets, limit, tags, post_deploy, playbook=playbook)
     # Run from ansible/ so ansible.cfg (roles path, pipelining, ControlPersist) applies.
     run(command, cwd=paths.ANSIBLE_DIR)

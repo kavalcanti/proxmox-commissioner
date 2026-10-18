@@ -13,7 +13,6 @@ from .errors import ConfigError, PvcError
 from .manifest import list_services, load_service, load_site
 from .ops import (
     ServiceStatus,
-    apply_site,
     build_ssh_exec_args,
     converge_existing,
     create_service_scaffold,
@@ -23,6 +22,7 @@ from .ops import (
     up_service,
 )
 from .providers.ansible import install_collections
+from .site import apply_images, configure_hosts
 from .utils import find_tool
 
 app = typer.Typer(
@@ -86,15 +86,25 @@ def init() -> None:
         "  1. Edit site.yml (Proxmox endpoint, nodes, storage, network)\n"
         "  2. Edit secrets.yml, then encrypt it:  uv run ansible-vault encrypt secrets.yml\n"
         "  3. pvc site apply          download the cloud image to every node\n"
-        "  4. pvc new <service>       scaffold a manifest\n"
-        "  5. pvc up <service>        create the VMs and configure them"
+        "  4. pvc site configure      optional: monitoring exporters on the Proxmox nodes\n"
+        "  5. pvc new <service>       scaffold a manifest\n"
+        "  6. pvc up <service>        create the VMs and configure them"
     )
 
 
 @site_app.command("apply")
 def site_apply(yes: bool = YES) -> None:
     """Download the cloud images listed in site.yml to every node."""
-    apply_site(yes=yes)
+    apply_images(yes=yes)
+
+
+@site_app.command("configure")
+def site_configure(
+    node: Optional[str] = typer.Option(None, "--node", help="Only this node from site.yml."),
+    tags: Optional[list[str]] = typer.Option(None, "--tags", "-t", help="Only these tags (repeatable or comma-separated)."),
+) -> None:
+    """Install node_exporter and smartctl_exporter on the Proxmox nodes."""
+    configure_hosts(node=node, tags=_split_tags(tags), on_step=_heading)
 
 
 # ------------------------------------------------------------------------------
