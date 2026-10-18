@@ -1,0 +1,76 @@
+---
+- name: Map the CPU architecture to the release name
+  ansible.builtin.set_fact:
+    _smartctl_exporter_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts['architecture']] | default('') }}"
+
+- name: Fail on an architecture without a pinned checksum
+  ansible.builtin.assert:
+    that:
+      - _smartctl_exporter_arch | length > 0
+      - _smartctl_exporter_arch in smartctl_exporter_checksums
+    fail_msg: "No smartctl_exporter release pinned for architecture {{ ansible_facts['architecture'] }}."
+
+- name: Install smartmontools
+  ansible.builtin.apt:
+    name: smartmontools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the download directory
+  ansible.builtin.file:
+    path: "{{ smartctl_exporter_download_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Download the smartctl_exporter release
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus-community/smartctl_exporter/releases/download/v{{ smartctl_exporter_version }}/smartctl_exporter-{{ smartctl_exporter_version }}.linux-{{ _smartctl_exporter_arch }}.tar.gz"
+    dest: "{{ smartctl_exporter_download_dir }}/smartctl_exporter-{{ smartctl_exporter_version }}.linux-{{ _smartctl_exporter_arch }}.tar.gz"
+    checksum: "sha256:{{ smartctl_exporter_checksums[_smartctl_exporter_arch] }}"
+    mode: "0644"
+  register: _smartctl_exporter_download
+
+- name: Check the installed binary
+  ansible.builtin.stat:
+    path: "{{ smartctl_exporter_install_dir }}/smartctl_exporter"
+  register: _smartctl_exporter_binary
+
+- name: Extract the release
+  ansible.builtin.unarchive:
+    src: "{{ _smartctl_exporter_download.dest }}"
+    dest: "{{ smartctl_exporter_download_dir }}"
+    remote_src: true
+  when: _smartctl_exporter_download.changed or not _smartctl_exporter_binary.stat.exists
+
+- name: Install the binary
+  ansible.builtin.copy:
+    src: "{{ smartctl_exporter_download_dir }}/smartctl_exporter-{{ smartctl_exporter_version }}.linux-{{ _smartctl_exporter_arch }}/smartctl_exporter"
+    dest: "{{ smartctl_exporter_install_dir }}/smartctl_exporter"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: _smartctl_exporter_download.changed or not _smartctl_exporter_binary.stat.exists
+  notify: Restart smartctl exporter
+
+# Reading SMART data needs raw disk access, so the service runs as root.
+- name: Install the systemd unit
+  ansible.builtin.template:
+    src: smartctl-exporter.service.j2
+    dest: /etc/systemd/system/smartctl-exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart smartctl exporter
+
+- name: Flush handlers so the unit is loaded before it is started
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable and start smartctl-exporter
+  ansible.builtin.service:
+    name: smartctl-exporter
+    state: started
+    enabled: true

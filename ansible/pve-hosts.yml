@@ -1,0 +1,24 @@
+---
+# Configures the Proxmox nodes themselves: `pvc site configure`. pvc generates the
+# inventory from site.yml (group `pve_hosts`, one host per node). A non-root
+# `proxmox.ssh_user` gets `ansible_become` there.
+#
+# Deliberately separate from site.yml: the VM base roles move SSH to another port and
+# enable fail2ban and UFW, which could lock you out of a node. Only additive,
+# monitoring-related changes belong here.
+
+- name: Prometheus Node Exporter
+  hosts: pve_hosts
+  gather_facts: true
+  tags: [node_exporter, monitoring]
+  roles:
+    - role: install-node-exporter
+      when: node_exporter_enabled | default(true)
+
+- name: SMART disk exporter
+  hosts: pve_hosts
+  gather_facts: true
+  tags: [smartctl_exporter, monitoring]
+  roles:
+    - role: install-smartctl-exporter
+      when: smartctl_exporter_enabled | default(true)

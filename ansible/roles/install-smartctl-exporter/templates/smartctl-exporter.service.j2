@@ -1,0 +1,25 @@
+# Managed by pvc. Changes are overwritten by the next `pvc site configure`.
+[Unit]
+Description=Prometheus smartctl exporter
+Documentation=https://github.com/prometheus-community/smartctl_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart={{ smartctl_exporter_install_dir }}/smartctl_exporter \
+  --web.listen-address={{ smartctl_exporter_listen_address }} \
+  --smartctl.interval={{ smartctl_exporter_interval }} \
+  --smartctl.rescan={{ smartctl_exporter_rescan }} \
+  --smartctl.powermode-check={{ smartctl_exporter_powermode_check }}{% for device in smartctl_exporter_devices %} \
+  --smartctl.device={{ device | quote }}{% endfor %}
+
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

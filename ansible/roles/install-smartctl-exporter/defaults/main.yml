@@ -1,0 +1,21 @@
+---
+# Debian ships no smartctl_exporter package, so the upstream release binary is installed
+# and run by a systemd unit. Disk health is sensitive: default to loopback and expose it
+# only on an address your PVE firewall restricts to the scraper.
+smartctl_exporter_version: "0.15.0"
+smartctl_exporter_listen_address: "127.0.0.1:9633"
+# Empty = the exporter scans for disks itself. Otherwise one `--smartctl.device` per entry;
+# a device type can follow a semicolon, e.g. "/dev/bus/0;megaraid,1".
+smartctl_exporter_devices: []
+smartctl_exporter_interval: 60s
+# Rescan for new or removed disks. Ignored by the exporter when devices are listed.
+smartctl_exporter_rescan: 10m
+# Never spin up a disk that is in standby just to read its SMART data.
+smartctl_exporter_powermode_check: standby
+smartctl_exporter_install_dir: /usr/local/bin
+smartctl_exporter_download_dir: /var/cache/smartctl_exporter
+
+# sha256 of smartctl_exporter-<version>.linux-<arch>.tar.gz. Update together with the version.
+smartctl_exporter_checksums:
+  amd64: "32ff269f2ca5708e2aa8209c715192efcc32f87bd575cae50a76d391a484976e"
+  arm64: "9a870fe6401748f51f5edcd73057f1c90c0b975f1f48d986eacc61443320276c"

@@ -53,8 +53,8 @@
   ansible.builtin.deb822_repository:
     name: gitlab
     types: deb
-    uris: "https://packages.gitlab.com/gitlab/gitlab-{{ gitlab_edition }}/debian/{{ ansible_distribution_release }}"
-    suites: "{{ ansible_distribution_release }}"
+    uris: "https://packages.gitlab.com/gitlab/gitlab-{{ gitlab_edition }}/debian/{{ ansible_facts['distribution_release'] }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
     components: main
     architectures: amd64
     signed_by: /etc/apt/keyrings/gitlab-keyring.asc
