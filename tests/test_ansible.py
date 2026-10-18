@@ -49,3 +49,10 @@ def test_post_deploy_with_tags_adds_to_them():
     command = build_playbook_command(INVENTORY, secrets(), tags=["compose"], post_deploy=True)
 
     assert option(command, "--tags") == "compose,post_deploy"
+
+
+def test_custom_playbook_and_no_secrets():
+    command = build_playbook_command(INVENTORY, None, playbook=Path("/tmp/pve-hosts.yml"))
+
+    assert command[command.index("-i") + 2] == "/tmp/pve-hosts.yml"
+    assert "-e" not in command and "--vault-password-file" not in command

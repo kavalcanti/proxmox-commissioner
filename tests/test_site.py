@@ -50,3 +50,26 @@ def test_example_site_file_is_valid():
     from pvc import paths
 
     parse_site(yaml.safe_load(paths.SITE_EXAMPLE.read_text()), "site.example.yml")
+
+
+def test_host_config_defaults_and_node_options():
+    site = parse_site({"proxmox": {"endpoint": "https://x:8006/"}, "nodes": {"pve": {"address": "10.0.0.1"}}})
+
+    assert site.proxmox.ssh_port == 22
+    assert site.nodes["pve"].configure is True
+    assert site.host_config.node_exporter.port == 9100
+    assert site.host_config.smartctl_exporter.port == 9633
+    assert site.host_config.smartctl_exporter.devices == []
+    assert site.host_config.node_exporter.enabled and site.host_config.smartctl_exporter.enabled
+
+
+def test_host_config_rejects_unknown_keys():
+    with pytest.raises(ConfigError) as error:
+        parse_site(
+            {
+                "proxmox": {"endpoint": "https://x:8006/"},
+                "nodes": {"pve": {"address": "10.0.0.1"}},
+                "host_config": {"smartctl_exporter": {"prot": 1}},
+            }
+        )
+    assert "prot" in str(error.value)
